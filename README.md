@@ -213,10 +213,11 @@ node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全�
 
 ## 发布前检查清单
 
-要把这个目录推到 GitHub，还有几处是**只有你知道**、我没法替你填的：
+这个仓库已发布在 <https://github.com/yuxu4468-hash/dsh-whale-meme>。下面保留清单，方便**你 fork 后重新发布**：
 
-1. **补仓库地址**：`package.json` 里加 `"repository"`、`"bugs"`、`"homepage"`；
-   `CHANGELOG.md` 底部的两个链接把 `OWNER` 换成真实账号与仓库名。
+1. ~~补仓库地址~~ **已完成**：`package.json` 的 `repository`/`bugs`/`homepage` 已指向
+   `yuxu4468-hash/dsh-whale-meme`，`CHANGELOG.md` 底部链接也已换成真实账号。
+   若你改了仓库名，这几处要一起改。
 2. **确认 `LICENSE` 的版权行**：现在是 `Copyright (c) 2026 dsh-whale-meme contributors`，
    按你的意愿换成真名或组织名。
 3. **确认授权边界**：读一遍 [NOTICE.md](NOTICE.md)。目前的口径是「本插件代码 MIT，
