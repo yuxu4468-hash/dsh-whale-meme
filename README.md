@@ -387,10 +387,39 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\uninstall.ps1"
 | 不带 `confirm: true` 绝不出图 | 出图有费用，默认什么都不做 |
 | 必须有 `preview` 发的令牌 | 保证确认的是**看到的那份**计划 |
 | 令牌一次性 | 用掉即失效，重复使用被拒 |
+| **计划不合法不发令牌** | 令牌代表「这份计划可以出图」，发给一份出不了的计划只会误导 |
 | 计划一变令牌即失效 | 令牌把任务/步骤/模型/档位/尺寸/背景/输入图/提示词 sha256/产出文件名一起哈希 |
 | 10 分钟有效 | 过期必须重新预览 |
 | 每张一次调用 | 费用可控；批次由调用方一张张来 |
 | 失败不自动重试 | 重试要重新确认，避免重复计费 |
+
+### 返回什么：自然语言回复
+
+每个 action 的返回值都同时有两种读者：
+
+- **`reply` 字段**：一段自然语言状态回复，先说结论、再给数字、最后给下一步。界面默认显示的就是它。
+- **结构化字段**：`ok`、`tasks`、`entries`、`planSummary` 等照旧全在，供代理与脚本判断。
+
+例如 `status` 的 `reply`：
+
+```
+✅ 工作区在 F:\whale meme
+
+四个阶段目录：datas✓  texts✓  _tools/payloads✓  outs✓
+
+共 1 个任务：
+  · task01 · 字符串替换把脚本改坏了
+      提示词 5/5，投喂负载 7 份
+      gpt-image-2：7 张图，交付件 05_整图一次出图_1024x1536.png
+      gpt-image-2.5-sunburst：7 张图，交付件 05_整图一次出图_1024x1536.png
+
+下一步：看某个任务的逐字文案用 task（例如 task="task01"）；确认投喂文本没被改过用 payload。
+```
+
+回复层的两条硬规则，都有测试守着：
+
+1. **失败就是失败**：不会把失败说成「完成」，也不会在失败时给出「可以出图」的指引；
+2. **回复层是附加物**：它自己出错时不影响结构化结果，只会在回复里说明「生成回复时出错」。
 
 出图执行走工作区既有的 `_tools/whale_image_client.py`（不重复实现 HTTP），
 并在提示词落盘后**再核一次 sha256**；返回里会指明客户端元数据里的 `prompt.sha256`
@@ -537,18 +566,20 @@ task01 的台词是什么？哪几个字要加粗？
 ## 开发
 
 ```bash
-node --test --test-concurrency=1 test/core.test.mjs test/plugin-smoke.test.mjs test/features.test.mjs test/integration.test.mjs
+node --test --test-concurrency=1 test/core.test.mjs test/plugin-smoke.test.mjs \
+  test/features.test.mjs test/reply.test.mjs test/integration.test.mjs
 node scripts/selftest.mjs          # 对真实工作区跑全部 action 并断言结论
 node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全部通过
 ```
 
-四组测试各管一段：
+五组测试各管一段：
 
 | 文件 | 管什么 | 是否需要真实工作区 |
 |---|---|---|
 | `test/core.test.mjs` | 纯逻辑：解析、抽取、审计、命令生成、scaffold（跑在临时夹具上） | 否 |
 | `test/plugin-smoke.test.mjs` | 宿主接线：工具注册、技能注册、契约注入、缺注册表时只告警不抛错（假 Cordis 上下文） | 否 |
 | `test/features.test.mjs` | 非文本要求、提示词组装、出图计划与令牌门禁、init、负载重建 | 否 |
+| `test/reply.test.mjs` | 自然语言回复：覆盖全部 action、失败不说成完成、不该给令牌时不给、回复层出错不影响结构 | 否 |
 | `test/integration.test.mjs` | 真实工作区上的结论是否正确 | 是，不在时自动跳过 |
 
 **没有构建步骤**：`lib/*.mjs` 是原生 ESM，DSH 直接加载。代价是没有静态类型，收益是不存在
@@ -597,7 +628,7 @@ node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全�
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── SECURITY.md                      攻击面说明（能读什么、能写什么、不做什么）
-├── .github/workflows/ci.yml         无依赖校验 + 四组测试 + 脚本语法检查
+├── .github/workflows/ci.yml         无依赖校验 + 五组测试 + 脚本语法检查
 ├── lib/
 │   ├── core.mjs                     工作区定位、任务发现、文案解析、负载/血缘/产物校验
 │   ├── commands.mjs                 逐字复现命令 + 模型档案 + 环境规则
@@ -606,6 +637,7 @@ node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全�
 │   ├── payloads.mjs                 按抽取计划逐字重建投喂负载
 │   ├── manifest.mjs                 .whale/manifest.json 的读写与抽取计划
 │   ├── workspace.mjs                init：补齐目录与占位文件（只创建不覆盖）
+│   ├── reply.mjs                    每个 action 的自然语言状态回复（先结论、再数字、给下一步）
 │   ├── tools.mjs                    whale_meme 的 11 个 action
 │   ├── scaffold.mjs                 新任务骨架
 │   └── index.mjs                    DSH 接线：工具注册、技能注册、契约注入、子进程适配
@@ -615,7 +647,7 @@ node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全�
 │   ├── uninstall.ps1                从 profile 卸载
 │   ├── patch-profile.mjs            Node 精确改写 profile 清单
 │   └── selftest.mjs                 对真实工作区跑自检
-└── test/                            四组测试（core / plugin-smoke / features / integration）
+└── test/                            五组测试（core / plugin-smoke / features / reply / integration）
 ```
 
 ## 授权与参与

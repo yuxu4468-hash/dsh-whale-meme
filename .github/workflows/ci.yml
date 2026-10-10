@@ -39,8 +39,9 @@ jobs:
           echo "无运行时依赖 ✓"
 
       # 纯逻辑 + 宿主接线。真实工作区集成测试不在这个仓库里，会自动跳过。
+      # 纯逻辑 + 宿主接线 + 新能力 + 回复层。真实工作区集成测试不在这个仓库里，会自动跳过。
       - name: 单元与接线测试
-        run: node --test --test-concurrency=1 test/core.test.mjs test/plugin-smoke.test.mjs
+        run: node --test --test-concurrency=1 test/core.test.mjs test/plugin-smoke.test.mjs test/features.test.mjs test/reply.test.mjs
 
       - name: 集成测试（无工作区时自动跳过，不应因此失败）
         run: node --test --test-concurrency=1 test/integration.test.mjs
@@ -58,7 +59,7 @@ jobs:
         shell: bash
         run: |
           test -s assets/skill/whale-meme-workflow/SKILL.md
-          node -e "
+          node --input-type=module -e "
             const { selfCheck } = await import('./lib/index.mjs');
             const c = selfCheck();
             if (!c.skillFileExists) { console.error('技能文件缺失'); process.exit(1); }
