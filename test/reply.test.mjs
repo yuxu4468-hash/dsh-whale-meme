@@ -22,14 +22,16 @@ const TOKEN_RE = /\b[0-9a-f]{64}\b/
 function assertClean(text, label) {
   assert.equal(typeof text, 'string', `${label}: 回复应为字符串`)
   assert.ok(text.trim().length > 0, `${label}: 回复不能为空`)
-  for (const bad of ['undefined', 'null', '[object Object]', 'NaN', 'Infinity']) {
+  // 注意：不把 `null` 当脏值 —— draft 的模板里故意有 null（表示「留空不传该参数」），
+  // 那是合法 JSON，不是未填充的占位异常。
+  for (const bad of ['undefined', '[object Object]', 'NaN', 'Infinity']) {
     assert.ok(!text.includes(bad), `${label}: 回复里出现了 ${bad}\n---\n${text}`)
   }
   assert.ok(!text.includes('\uFFFD'), `${label}: 回复里有替换字符`)
 }
 
 describe('回复层：覆盖与洁净度', () => {
-  it('11 个 action 都有专用回复模板（不落到通用兜底）', async () => {
+  it('14 个 action 都有专用回复模板（不落到通用兜底）', async () => {
     const fixture = makeFixtureWorkspace()
     const calls = {
       status: {},
@@ -43,6 +45,10 @@ describe('回复层：覆盖与洁净度', () => {
       preview: { task: 'task07', rawPrompt: '【任务】测试用图。' },
       build: { task: 'task07' },
       render: { task: 'task07', rawPrompt: '【任务】测试用图。' },
+      // fetch 传一个不存在的包名：既不触网络，也仍走 fetch 的回复模板
+      fetch: { bundles: ['nope'] },
+      draft: { narrative: '测试需求' },
+      draftCheck: { draft: { subject: '标题', panels: [{ marker: '格 1', text: '一句话。' }] } },
     }
     assert.deepEqual(Object.keys(calls).sort(), [...ACTIONS].sort(), '模板表必须覆盖全部 action')
 

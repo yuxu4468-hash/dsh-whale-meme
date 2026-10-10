@@ -8,6 +8,40 @@
 
 暂无。
 
+## [0.5.0] - 2026-10-11
+
+三项扩展：下载参考素材、唤醒词、自由需求起稿。
+
+### Added
+
+- **`fetch`：从上游开源仓库下载角色参考素材**。走 GitHub REST API（不依赖 git ——
+  本机到 github.com 的 git 传输不通、`raw.githubusercontent.com` 也被阻，而 API 域名正常），
+  不引入第三方包。素材包：`character`（立绘 + logo）/ `samples`（样例与图库清单）/
+  `previews`（251 张缩略图）/ `large` / `media`，或 `all`；默认 `character + samples + previews`（约 17 MB）。
+  安全设计：默认 dry-run；**只往 `datas/` 写**；只取图片与 json（上游是站点仓库，字体、favicon、
+  二维码、音频、网页本体一律不下）；体积大的包给出警告；每次下载写 `datas/_fetched/SOURCE.json`
+  记录仓库、commit、许可与逐文件 sha256。
+  实测交叉验证：下载到的立绘 sha256 与工作区出图元数据里记录的参考图 sha 完全一致。
+- **唤醒词「蓝色大肥鱼表情包绘画」**。写在技能 `description` 里 —— 技能目录会被注入会话，
+  所以这句话一出现就会命中本工作流。本机 asar 里检索确认**没有斜杠命令注册 API**
+  （只有 AWS SDK 的 `command` 模块），因此技能描述是唯一可靠的注册面。技能正文也新增了
+  「## 唤醒词」一节，写明唤醒后第一步应调 `status`。
+- **`draft` + `draftCheck`：自由需求 → 整套提示词草稿 → 用户校验修改**。
+  `draft` 把一句自然语言需求变成**待填写模板 + 校验清单**；LLM 依此产出文案后，
+  `draftCheck` 校验并返回**完整草稿供用户逐字复核修改**（含可直接落盘的 `storyboardPreview`，
+  已用同一套分镜解析器验证自洽）。这让流程从「必须先定稿文案才能往下走」放宽为
+  「先说一句话，文案边想边改」。
+  **插件不代写文案**（文案由 LLM 依需求产出），且两步**都不落盘**（不在 `WRITING_ACTIONS` 里）。
+  校验从严：句末全角句号、`bold` 必须真的出现在台词里、最多两格、marker 不重复、
+  「官方」字样、透明底与模型不匹配、模板占位符未填 —— 半角标点与连续英文只提醒不阻断。
+- 新增 `test/extensions.test.mjs`（32 项），全量 153 项、六组测试。
+
+### Changed
+
+- README 新增「步骤 0.5 下载素材」与「步骤 7 只有一句话需求？从草稿开始」；
+  30 秒速览补上三件配套（fetch / draft / commands）；工具章节补「素材下载与文案起草」表。
+- `fetch` 归入 `WRITING_ACTIONS`（默认 dry-run）。
+
 ## [0.4.0] - 2026-10-11
 
 ### Changed

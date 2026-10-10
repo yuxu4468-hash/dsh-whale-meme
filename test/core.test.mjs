@@ -421,7 +421,7 @@ describe('资产自检', () => {
     assert.equal(check.plugin, 'whale-meme')
     assert.deepEqual(ACTIONS, [
       'status', 'task', 'payload', 'lineage', 'outputs', 'commands', 'scaffold',
-      'init', 'preview', 'build', 'render',
+      'init', 'preview', 'build', 'render', 'fetch', 'draft', 'draftCheck',
     ])
   })
 })

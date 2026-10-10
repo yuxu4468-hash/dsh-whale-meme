@@ -493,12 +493,12 @@ describe('负载重建（build）', () => {
 // ─────────────────────── 工具层集成 ───────────────────────
 
 describe('新增 action 的工具层行为', () => {
-  it('ACTIONS 覆盖全部 11 个动作且顺序稳定', () => {
+  it('ACTIONS 覆盖全部 14 个动作且顺序稳定', () => {
     assert.deepEqual(ACTIONS, [
       'status', 'task', 'payload', 'lineage', 'outputs', 'commands', 'scaffold',
-      'init', 'preview', 'build', 'render',
+      'init', 'preview', 'build', 'render', 'fetch', 'draft', 'draftCheck',
     ])
-    assert.equal(TOOL_ACTIONS.length, 11)
+    assert.equal(TOOL_ACTIONS.length, 14)
   })
 
   it('未知 action 被拒绝', () => {

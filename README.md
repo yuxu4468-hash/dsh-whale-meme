@@ -1,7 +1,9 @@
 # dsh-whale-meme
 
 把**表情包绘制工作区**的工作流固化成一个可安装的 [DeepSeek Harness](https://deepseek.com)（DSH）插件：
-一个 11 个 action 的校验／预览／出图工具，加一份工作流技能。
+一个 14 个 action 的校验／素材下载／起草／预览／出图工具，加一份工作流技能。
+
+> **唤醒词：蓝色大肥鱼表情包绘画** —— 说这句话就会进入本工作流（见[使用教程](#使用教程)步骤 0）。
 
 > **这个仓库只有代码和文档。** 不含任何角色立绘、参考语料、出图产物或提示词成品。
 > 角色与语料的授权见 [NOTICE.md](NOTICE.md) —— 它们仍然只归原作者与二次设计者。
@@ -38,7 +40,7 @@
 
 | | 内容 | 形态 |
 |---|---|---|
-| 可判定 | 工作区结构、逐字文案、投喂负载是否被改写、产物血缘、产物尺寸与透明通道 | `whale_meme` 工具的 11 个 action |
+| 可判定 | 工作区结构、逐字文案、投喂负载是否被改写、产物血缘、产物尺寸与透明通道 | `whale_meme` 工具的 14 个 action |
 | 不可判定 | 角色五要素是否保住、情绪反转是否成立、排版是否合规、合规边界 | `whale-meme-workflow` 技能正文 |
 
 工作流里的代价是真实的：一条硬规则漏掉，就是一次付费出图调用。
@@ -59,19 +61,32 @@
 | 阶段 | 做什么 | 工具 |
 |---|---|---|
 | ① 看清 | 工作区在哪、缺什么、各任务什么状态 | `status` |
-| ② **定稿** | 拿到唯一权威的逐字文案与必加粗的字 | `task` |
+| ② **定稿** | 拿到唯一权威的逐字文案与必加粗的字 | `task`（或 `draft` → `draftCheck` 起草） |
 | ③ **验料** | 证明投喂文本没被手打改写 | `payload` |
 | ④ 出图 | 调参数 → 看提示词 → 确认 → 出图 → 验收 | `preview` → `render` → `lineage` + `outputs` |
 
-开新任务是另一条支线：`init`（补目录）→ `scaffold`（建骨架）→ 文案定稿 → `build`（抽负载）。
+三件配套：
 
-不想让插件出图，用 `commands` 拿命令自己执行即可，其余环节完全一样。
+| 场景 | 工具 |
+|---|---|
+| 工作区还没有素材 | `fetch` 从上游开源仓库下载参考图 |
+| 只有一句话需求，还没想好文案 | `draft` → LLM 产出 → `draftCheck` → 你逐字改 |
+| 不想让插件出图 | `commands` 拿命令自己执行，其余环节完全一样 |
+
+开新任务的支线：`init`（补目录）→ `scaffold`（建骨架）→ 文案定稿 → `build`（抽负载）。
 
 ---
 
-### 步骤 0 · 确认插件活着
+### 步骤 0 · 唤醒与确认插件活着
 
-先问一句常识性问题：
+最简单的开始方式：**直接说唤醒词**。
+
+```
+你：蓝色大肥鱼表情包绘画
+```
+
+这句话写在技能描述里，会进入会话的技能目录 —— 所以它一说出来就会命中 `whale-meme-workflow`，
+代理随即按本工作流推进。也可以问得更自然：
 
 ```
 你：这个工作区怎么工作？
@@ -90,6 +105,49 @@
 
 两条都没反应，几乎一定是**没重启**（插件在应用启动时装载）：托盘右键 → 退出，再重新打开。
 细节见[安装后必须重启](#安装后必须重启)。
+
+### 步骤 0.5 · 工作区还没有素材？先下载
+
+如果 `datas/` 里没有立绘和参考语料，可以从上游开源仓库直接拉 ——
+**EDMOK/blue-fish-archive**（本工作区语料的来源，公开仓库）：
+
+```
+你：把参考图下载下来
+调用：whale_meme(action="fetch")
+```
+
+```
+✅ 素材下载计划如下（这是预览，还没有下载任何文件）：
+
+  · 角色基准（立绘 + 官方 logo）
+      3 个文件，3.2 MB → datas/01_character/
+  · 表情包样例与图库清单
+      5 个文件，1.1 MB → datas/02_reference_stickers/
+  · 社区同人语料缩略图（251 张 webp，约 12.5 MB）
+      251 个文件，12.5 MB → datas/02_reference_stickers/previews/
+
+合计 259 个文件，16.8 MB。
+上游：EDMOK/blue-fish-archive（main @ 2282e0dc82）
+
+下一步：确认上面这份清单没问题后，加 write=true 才会真正下载（只往 datas/ 写）。
+
+⚠️ 上游素材是 **CC BY-NC-SA 4.0**：保留署名、非商业、相同方式共享；
+   参考语料只作风格/题材参考，不得作为成品交付。
+```
+
+确认后再说一句「下载」，代理会带 `write: true` 重调。几点要说明：
+
+| | 说明 |
+|---|---|
+| 怎么下的 | 走 GitHub REST API，**不依赖 git**（本机到 github.com 的 git 传输不通，API 域名正常），也不引入第三方包 |
+| 下到哪 | **只往 `datas/` 写**，不碰 `texts/`、`outs/`，也不改 `_tools/` 里的脚本 |
+| 挑了哪些 | 只取图片与 json。上游是站点仓库，字体、favicon、二维码、音频、网页本体**一律不下** |
+| 体积大的包 | `large`（33.7 MB）与 `media`（242 MB）不在默认组合里；`media` 会明确警告 |
+| 来源记录 | 每次下载写 `datas/_fetched/SOURCE.json`：仓库、commit、许可与逐文件 sha256 |
+| 速率 | 未认证的 GitHub API 每小时 60 次；251 张缩略图会用到配额，可设 `GH_TOKEN` 提高额度 |
+
+> 实测交叉验证：下载到的立绘 sha256 是 `30c9271ec44a…`，与本工作区出图元数据里记录的参考图 sha 完全一致
+> —— 确认下到的就是同一份文件。
 
 ### 步骤 1 · 摸清现状
 
@@ -386,20 +444,101 @@ gpt-image-2（7 张，checks.json 有）
 > ⚠️ 这一步最容易被误当成「验收通过」。它只查机械指标 ——
 > **中文逐字、加粗范围、角色五要素、情绪反差必须人眼放大到 200%**，按 `04_验收清单.md` 走。
 
-### 步骤 7 · 出问题时的排查顺序
+### 步骤 7 · 只有一句话需求？从草稿开始
+
+前面几步都假定文案已经定稿。但实际使用里人往往只有一句话 —— 文案是要边想边改的。
+这条路把「想」和「定」分开：**插件不写台词**，它只给模板与校验；文案由 LLM 依你的需求产出，
+**再由你逐字确认**。
+
+```
+你：我想画一个她发现脚本被改坏了、先得意后破防的两格梗，先给我个草稿
+调用：whale_meme(action="draft", narrative="她发现脚本被改坏了，先得意后破防")
+```
+
+返回一份待填写的模板（这一步不写文件、不出图）：
+
+```jsonc
+{
+  "narrative": "她发现脚本被改坏了，先得意后破防",
+  "subject": "<这个任务要讲的梗是什么？一句话>",
+  "panels": [
+    { "marker": "格 1（上格）", "text": "<第一格台词，句末用全角句号。>", "mood": "<情绪，例如：自信满满>" },
+    { "marker": "格 2（下格）", "text": "<第二格台词，句末用全角句号。>", "mood": "<情绪反转>", "bold": "<必须加粗的字，没有就留空>" }
+  ],
+  "style": "anime-cel", "size": "1024x1536",
+  "quality": null, "background": null,
+  "extra": [], "avoid": [], "palette": []
+}
+```
+
+代理会照这个结构产出草稿，再调 `draftCheck` 校验：
+
+```
+调用：whale_meme(action="draftCheck", draft={ ...填好的草稿... })
+```
+
+```
+✅ 草稿校验通过。下面这份就是要画进图里的东西，**请逐字校对**：
+
+【文案草稿】字符串替换把脚本改坏了
+
+原始需求：
+  她发现脚本被改坏了，先得意后破防
+
+逐字文案（这几个字会被原样画进图里，请逐字校对）：
+  [格 1（上格）] 我的字符串替换把脚本改坏了。我直接读取并修复。
+        情绪：自信满满
+  [格 2（下格）] 文件被我的替换操作整篇损坏。
+        情绪：当场破防
+        加粗：整篇损坏
+
+出图参数：
+  模型      gpt-image-2.5-sunburst
+  画风      anime-cel
+  尺寸      1024x1536
+  配色      深藏青为主
+
+角色剪影三要素（不得丢失）：头侧两片鲸鳍状耳；身后完整大体量双叉鲸尾；深蓝→浅蓝渐变长发＋头顶偏左卷曲呆毛
+
+草稿指纹  82295f9516d4
+```
+
+**这一步就是让你改的地方** —— 直接说「下格改成『文件被我改烂了。』」，改完再 `draftCheck` 一次。
+草稿指纹会随内容变化，便于确认你复核的是同一份。
+
+校验器会挡住这些（都是实测踩过的坑）：
+
+| 会被挡下的情况 | 为什么 |
+|---|---|
+| 台词句末不是全角句号 | 验收清单 A 组硬要求，全角句号是唯一允许的句末标点 |
+| `bold` 里的字**没出现在台词里** | 最常见的「写了但没生效」：模型无从加粗一个不存在的词 |
+| 超过两格 | 本项目实测结论：叙事最多上下两格 |
+| `marker` 重复 | 分格对不上，出图会串 |
+| 出现「官方」字样 | 非官方同人，验收清单 E 组明令禁止 |
+| 透明底配 `gpt-image-2` | 该模型不支持，会被直接拒绝 |
+| 还是模板占位符 | 防止把没填的模板当草稿交上来 |
+
+半角标点、连续英文字母只**提醒**不阻断 —— 那可能是你刻意的。
+
+确认无误后接既有流程：`scaffold` 建任务 → 把文案写进 `00_分镜与文案锁定.md` → `build` 抽负载 → `preview` 出图。
+（`draftCheck` 会顺带给出可直接落盘的 `storyboardPreview`，并已用同一套分镜解析器验证过自洽。）
+
+### 步骤 8 · 出问题时的排查顺序
 
 按这个顺序查，基本一步到位：
 
 | 症状 | 先查这里 |
 |---|---|
 | 工具/技能毫无反应 | [重启了吗](#安装后必须重启) |
+| 素材还没下 | `fetch`（步骤 0.5） |
 | 提示词五件套不齐 | `status` 的「提示词 N/5」 |
-| 文案格式不对（缺全角句号等） | `task` 里的 ⚠️ 行 |
+| 文案格式不对（缺全角句号等） | `task` 里的 ⚠️ 行；草稿阶段看 `draftCheck` 的 errors |
 | 担心投喂被改过 | `payload`，各状态含义见步骤 3 |
 | 产物来路不明 | `lineage`，看 `unknown-prompt` / `no-metadata` |
 | 尺寸或透明底不对 | `outputs` 的尺寸与 `alphaChannel` |
 | 出图失败 | `render` 返回里的退出码与客户端输出；**失败不会自动重试** |
 | 计划被拒 | 看回复里「问题：」那几行，改完重新 `preview` |
+
 ## 安装
 
 ### 方式 A：脚本（推荐，可回滚）
@@ -449,7 +588,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\uninstall.ps1"
 
 ## 工具：`whale_meme`
 
-11 个 action。`status`~`commands` 只读；`scaffold` / `init` / `build` **默认 dry-run**；
+14 个 action。`status`~`commands` 只读；`scaffold` / `init` / `build` **默认 dry-run**；
 `render` **默认只出计划**，真出图必须显式确认。
 
 ### 只读校验
@@ -473,6 +612,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\uninstall.ps1"
 | `init` | 补齐工作区缺的目录与占位文件 | 只创建、**不覆盖**；已存在的文件一字不改；不碰 `_tools/` 脚本 |
 | `scaffold` | 新建任务骨架（五件套 + README） | 拒绝覆盖已占用任务号；先出计划，`write: true` 才落盘 |
 | `build` | 按清单里的抽取计划从 `texts/` 逐字重建投喂负载 | 有 `assert` 断言防索引错位；**断言失败就一个文件都不写** |
+| `fetch` | 从上游开源仓库 `EDMOK/blue-fish-archive` 下载角色参考素材 | **只往 `datas/` 写**；只取图片与 json（字体/图标/音频/网页一律不下）；写 `SOURCE.json` 记来源与许可；体积大的包会警告 |
+
+### 素材下载与文案起草
+
+| action | 做什么 |
+|---|---|
+| `fetch` | 按素材包（`character` / `samples` / `previews` / `large` / `media`，或 `all`）从上游下载参考图；默认 `character + samples + previews`（约 17 MB）；走 GitHub REST API，不依赖 git |
+| `draft` | **一句自由需求 → 待填写草稿模板 + 校验清单**。插件不代写文案 —— 文案由 LLM 依需求产出 |
+| `draftCheck` | 校验并结构化填好的草稿 → 返回**完整草稿供用户逐字复核修改**（含 `storyboardPreview`，已用同一套分镜解析器验证自洽） |
+
+`draft` / `draftCheck` **都不落盘**（不在 `WRITING_ACTIONS` 里），文案要用户确认后才走 `scaffold` 写进 `texts/`。
 
 ### 提示词预览与出图
 
@@ -668,12 +818,12 @@ task01 的台词是什么？哪几个字要加粗？
 
 ```bash
 node --test --test-concurrency=1 test/core.test.mjs test/plugin-smoke.test.mjs \
-  test/features.test.mjs test/reply.test.mjs test/integration.test.mjs
+  test/features.test.mjs test/reply.test.mjs test/extensions.test.mjs test/integration.test.mjs
 node scripts/selftest.mjs          # 对真实工作区跑全部 action 并断言结论
 node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全部通过
 ```
 
-五组测试各管一段：
+六组测试各管一段：
 
 | 文件 | 管什么 | 是否需要真实工作区 |
 |---|---|---|
@@ -681,6 +831,7 @@ node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全�
 | `test/plugin-smoke.test.mjs` | 宿主接线：工具注册、技能注册、契约注入、缺注册表时只告警不抛错（假 Cordis 上下文） | 否 |
 | `test/features.test.mjs` | 非文本要求、提示词组装、出图计划与令牌门禁、init、负载重建 | 否 |
 | `test/reply.test.mjs` | 自然语言回复：覆盖全部 action、失败不说成完成、不该给令牌时不给、回复层出错不影响结构 | 否 |
+| `test/extensions.test.mjs` | 上游素材下载的路径映射与噪音过滤、唤醒词、自由需求起稿的校验 | 否 |
 | `test/integration.test.mjs` | 真实工作区上的结论是否正确 | 是，不在时自动跳过 |
 
 **没有构建步骤**：`lib/*.mjs` 是原生 ESM，DSH 直接加载。代价是没有静态类型，收益是不存在
@@ -729,7 +880,7 @@ node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全�
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── SECURITY.md                      攻击面说明（能读什么、能写什么、不做什么）
-├── .github/workflows/ci.yml         无依赖校验 + 五组测试 + 脚本语法检查
+├── .github/workflows/ci.yml         无依赖校验 + 六组测试 + 脚本语法检查
 ├── lib/
 │   ├── core.mjs                     工作区定位、任务发现、文案解析、负载/血缘/产物校验
 │   ├── commands.mjs                 逐字复现命令 + 模型档案 + 环境规则
@@ -739,7 +890,9 @@ node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全�
 │   ├── manifest.mjs                 .whale/manifest.json 的读写与抽取计划
 │   ├── workspace.mjs                init：补齐目录与占位文件（只创建不覆盖）
 │   ├── reply.mjs                    每个 action 的自然语言状态回复（先结论、再数字、给下一步）
-│   ├── tools.mjs                    whale_meme 的 11 个 action
+│   ├── fetch.mjs                    从上游开源仓库下载参考素材（纯逻辑可测，只在 write 时联网）
+│   ├── draft.mjs                    自由需求 → 草稿模板 → 校验（不写文案、不落盘）
+│   ├── tools.mjs                    whale_meme 的 14 个 action
 │   ├── scaffold.mjs                 新任务骨架
 │   └── index.mjs                    DSH 接线：工具注册、技能注册、契约注入、子进程适配
 ├── assets/skill/whale-meme-workflow/SKILL.md
@@ -748,7 +901,7 @@ node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全�
 │   ├── uninstall.ps1                从 profile 卸载
 │   ├── patch-profile.mjs            Node 精确改写 profile 清单
 │   └── selftest.mjs                 对真实工作区跑自检
-└── test/                            五组测试（core / plugin-smoke / features / reply / integration）
+└── test/                            六组测试（core / plugin-smoke / features / reply / extensions / integration）
 ```
 
 ## 授权与参与
