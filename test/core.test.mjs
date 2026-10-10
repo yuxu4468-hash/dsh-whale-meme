@@ -419,7 +419,10 @@ describe('资产自检', () => {
     const check = selfCheck()
     assert.equal(check.skillFileExists, true)
     assert.equal(check.plugin, 'whale-meme')
-    assert.deepEqual(ACTIONS, ['status', 'task', 'payload', 'lineage', 'outputs', 'commands', 'scaffold'])
+    assert.deepEqual(ACTIONS, [
+      'status', 'task', 'payload', 'lineage', 'outputs', 'commands', 'scaffold',
+      'init', 'preview', 'build', 'render',
+    ])
   })
 })
 

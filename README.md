@@ -66,7 +66,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\uninstall.ps1"
 
 ## 工具：`whale_meme`
 
-除 `scaffold` 的落盘分支外，全部只读：不生成图片、不改任何既有文件。
+11 个 action。`status`~`commands` 只读；`scaffold` / `init` / `build` **默认 dry-run**；
+`render` **默认只出计划**，真出图必须显式确认。
+
+### 只读校验
 
 | action | 回答什么问题 |
 |---|---|
@@ -76,10 +79,62 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\uninstall.ps1"
 | `lineage` | 每一张产物到底是用哪份负载出的（元数据 `prompt.sha256` ↔ 负载索引） |
 | `outputs` | 产物尺寸、透明通道、推荐交付件、元数据齐全度、异常尺寸 |
 | `commands` | 某一步的逐字复现命令（`build`/`mother`/`upper`/`lower`/`whole`/`compose`/`check`/`index`） |
-| `scaffold` | 新建任务骨架：默认 **dry-run** 只出计划，`write: true` 才创建；拒绝覆盖已占用任务号 |
 
 `payload` 是其中最有价值的一个：它同时校验**磁盘字节的 sha256 与索引记录一致**，且**负载正文仍逐字出现在
 它声称的来源文件里**。这是「投喂文本没有被改写」的机器证据，也是这套流水线最容易出问题的一环。
+
+### 会写盘的动作（默认 dry-run）
+
+| action | 做什么 | 安全设计 |
+|---|---|---|
+| `init` | 补齐工作区缺的目录与占位文件 | 只创建、**不覆盖**；已存在的文件一字不改；不碰 `_tools/` 脚本 |
+| `scaffold` | 新建任务骨架（五件套 + README） | 拒绝覆盖已占用任务号；先出计划，`write: true` 才落盘 |
+| `build` | 按清单里的抽取计划从 `texts/` 逐字重建投喂负载 | 有 `assert` 断言防索引错位；**断言失败就一个文件都不写** |
+
+### 提示词预览与出图
+
+| action | 做什么 |
+|---|---|
+| `preview` | 把「文本之外的要求」（画风/尺寸/质量档/透明底/配色/附加要求/禁止项）规范化，组装出**最终要喂的完整提示词**，给出确认令牌 |
+| `render` | **确认后直接出图**：默认只返回计划；带 `confirm: true` + `preview` 发的令牌才真正调用图像模型 |
+
+`render` 的门禁规则（每一条都有测试守着）：
+
+| 规则 | 为什么 |
+|---|---|
+| 不带 `confirm: true` 绝不出图 | 出图有费用，默认什么都不做 |
+| 必须有 `preview` 发的令牌 | 保证确认的是**看到的那份**计划 |
+| 令牌一次性 | 用掉即失效，重复使用被拒 |
+| 计划一变令牌即失效 | 令牌把任务/步骤/模型/档位/尺寸/背景/输入图/提示词 sha256/产出文件名一起哈希 |
+| 10 分钟有效 | 过期必须重新预览 |
+| 每张一次调用 | 费用可控；批次由调用方一张张来 |
+| 失败不自动重试 | 重试要重新确认，避免重复计费 |
+
+出图执行走工作区既有的 `_tools/whale_image_client.py`（不重复实现 HTTP），
+并在提示词落盘后**再核一次 sha256**；返回里会指明客户端元数据里的 `prompt.sha256`
+是否与本次计划一致 —— 这是投喂零改写的机器证据。
+
+### 文本之外的要求
+
+```jsonc
+{ "action": "preview", "task": "task02",
+  "style": "chibi-sticker",                     // 画风预设
+  "size": "1024x1024", "quality": "xhigh",
+  "background": "transparent",                  // 只对 gpt-image-2.5 系有效
+  "palette": ["深藏青为主"],
+  "extra": ["尾鳍不要有白斑", "气泡距顶端至少 5% 高度"],
+  "avoid": ["第二个人物"],
+  "panels": 1 }
+```
+
+画风预设：`anime-cel`（日系 Q 版赛璐璐，默认）/ `chibi-sticker` / `watercolor` / `flat-vector` /
+`pixel-art` / `retro-anime-90s`，也可传自定义风格描述。
+
+三条设计约束：
+
+1. **不重写基础提示词** —— 要求以追加段落加在原文之后，原文逐字保留，预览里一眼能看出加了什么；
+2. **禁止项改写成正向句子** —— 两个图像模型都没有负向词参数；
+3. **凭据与「官方」措辞被直接拒绝** —— 前者不该进提示词，后者违反合规底线。
 
 ## 技能：`whale-meme-workflow`
 
@@ -90,7 +145,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\uninstall.ps1"
 - 「立绘 → Q 版母图 → 上格 → 下格」编辑链，以及为什么第 0 步不能省
 - 7 条本机实测环境坑（签名 URL 过期、下载需浏览器 UA、pwsh 不能内联中文等）
 - 验收五组与合规底线
-- 新建任务的开局顺序
+- 新任务开局：`init` 补目录 → `scaffold` 建骨架 → 文案定稿 → `build` 抽负载
+- `extraction` 抽取计划的写法与 `assert` 断言防错位的原因
+- `preview` 的非文本要求清单与三条设计约束
+- `render` 的门禁规则表
 
 ## 使用说明
 
@@ -235,24 +293,32 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\uninstall.ps1"
 ```
 这个工作区怎么工作？
 现在是什么状态？
+工作区还缺哪些目录？（init）
 task01 的台词是什么？哪几个字要加粗？
 投喂文本有没有被手打改写？
-出图第一步该敲什么命令？
-用 gpt-image-2.5-sunburst 的 xhigh 出整图，命令给我
+负载要重建一下（build）
+换成水彩画风、1024 方形、透明底，先给我看提示词预览（preview）
+预览没问题，出图（render + confirm + token）
 这些产物分别是用哪份提示词出的？
 出的图尺寸和透明通道对不对？
 帮我开一个新任务：题材是「……」
 ```
 
-### 7. 它不会做的事
+### 7. 边界：它会做什么、不会做什么
 
 | | 说明 |
 |---|---|
-| 不出图 | 只给命令文本；执行与否你决定。出图有费用 |
+| **能出图，但默认不出** | `render` 不带 `confirm: true` 时只返回计划；确认要带 `preview` 发的令牌，一次性、计划一改即失效 |
+| **能写盘，但默认不写** | `scaffold` / `init` / `build` 都要显式 `write: true`；`init` 只创建不覆盖 |
 | 不替你写文案 | `task` 只读 `00_*` 并结构化，绝不改写 |
-| 不自动验收 | `outputs` 是机械检查，不是验收结论 |
-| 不发布、不上传 | 无任何网络代码 |
+| 不自动验收 | `outputs` 是机械检查，**不能替代** `04_验收清单.md` 的人眼逐字核对 |
+| 失败不自动重试出图 | 重试要重新确认，避免重复计费 |
+| 不发布、不上传 | 出图是调用图像 API；插件自身没有别的网络代码，也没有遥测 |
 | 不碰工作区外的文件 | 唯一例外是安装/卸载脚本改 DSH profile（带备份、可回滚） |
+| 不碰 `_tools/` 下的脚本 | 只读引用；出图也是调用那份既有客户端，不重写它 |
+
+> 出图的费用与副作用由**调用方**承担：每确认一次 = 一次付费调用。插件把「确认」做成了一次性的令牌，
+> 而不是一个可以复用的开关。
 
 ## 配置
 
@@ -318,13 +384,19 @@ node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全�
 
 ## 设计取舍
 
-- **分层**：`lib/core.mjs`（纯逻辑，只依赖 `node:`）→ `lib/commands.mjs`（命令生成）→
-  `lib/tools.mjs`（action 分发）→ `lib/index.mjs`（唯一的 DSH 接线层）。前三层脱离宿主就能测。
-- **定位失败不阻塞装载**：找不到工作区时插件照常装载，工具在每次调用时重新解析并给出可执行错误，
-  这样插件不会「换个目录就整个失效」。
+- **分层**：`lib/core.mjs`（纯逻辑，只依赖 `node:`）→ `lib/requirements.mjs` / `lib/payloads.mjs` /
+  `lib/workspace.mjs`（计划与抽取，仍然是纯逻辑）→ `lib/tools.mjs`（action 分发）→
+  `lib/index.mjs`（唯一的 DSH 接线层）。前三层脱离宿主就能测，测试里也确实这么测的。
+- **定位失败不阻塞装载**：找不到工作区时插件照常装载，工具在每次调用时重新解析并给出可执行错误。
+- **`subprocess` 不列为必需**：它是 `render` 才需要的可选能力。列为必需会让插件在缺少该服务的宿主上
+  整个保持 pending —— 连只读工具都装不上，这比「出图不可用」糟糕得多。
 - **契约注入是加分项**：宿主没有可用入口时只写一条 debug 日志；契约内容同时内嵌在技能正文里，不会丢。
-- **出图不自动化**：出图有费用、有副作用。`commands` 只生成逐字命令，由人/代理显式发起。
-- **scaffold 默认 dry-run**：写盘必须显式 `write: true`。
+- **出图默认什么都不做**：`render` 不带 `confirm` 时绝不触发子进程；令牌一次性、计划一变即失效。
+  出图有费用、有副作用，所以宁可多一步确认。
+- **写盘动作一律默认 dry-run**：`scaffold` / `init` / `build` 都要显式 `write: true`。
+- **不重复实现 HTTP**：出图走工作区既有的 `_tools/whale_image_client.py`，
+  重试、签名 URL 过期、浏览器 UA 这些坑留在那一处。
+- **不重写基础提示词**：非文本要求以追加段落形式拼接，原文逐字保留，预览可核对。
 
 ## 常见问题
 
@@ -336,7 +408,12 @@ node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全�
 | `payload` 报 `payload-drift` | 负载被手打改写过，或上游 `texts/` 改了而负载没重建。重建后再出图 |
 | `lineage` 报 `unknown-prompt` | 该产物用的负载已不在索引里（负载被重建或曾手打投喂） |
 | `lineage` 报 `no-metadata` | 该产物没有元数据。本地拼合产物属正常；其它情况请检查 |
-| `outputs` 报「缺少同名 .json 元数据」 | 同上。元数据文件名口径是「去掉图片扩展名 + `.json`」 |
+| `build` 说「清单里没有 extraction 计划」 | 按返回里的模板在 `.whale/manifest.json` 给该任务补一段；**别省 `assert`** |
+| `build` 说「断言短语找不到」 | 索引错位了。核对 `block` 序号，不要绕过断言 |
+| `render` 说「缺少 token」 | 先 `preview` 拿令牌；令牌一次性，用掉要重新 preview |
+| `render` 说「令牌与当前计划不一致」 | 预览之后改了参数。重新 preview 再确认 |
+| `render` 说宿主没有子进程能力 | 用 `commands` 拿命令自己执行（插件明确拒绝，不会静默失败） |
+| `preview` 说「拿不到基础提示词」 | 该任务缺 `02_提示词_*.md`，或用 `rawPrompt` 直接给提示词正文 |
 
 ## 目录
 
@@ -349,20 +426,25 @@ node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全�
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── SECURITY.md                      攻击面说明（能读什么、能写什么、不做什么）
-├── .github/workflows/ci.yml         无依赖校验 + 三层测试 + 脚本语法检查
+├── .github/workflows/ci.yml         无依赖校验 + 四组测试 + 脚本语法检查
 ├── lib/
 │   ├── core.mjs                     工作区定位、任务发现、文案解析、负载/血缘/产物校验
 │   ├── commands.mjs                 逐字复现命令 + 模型档案 + 环境规则
-│   ├── tools.mjs                    whale_meme 的 7 个 action
+│   ├── requirements.mjs             画风预设、非文本要求规范化、提示词组装、出图计划与令牌
+│   ├── render.mjs                   确认令牌的发放/校验/消耗，出图执行
+│   ├── payloads.mjs                 按抽取计划逐字重建投喂负载
+│   ├── manifest.mjs                 .whale/manifest.json 的读写与抽取计划
+│   ├── workspace.mjs                init：补齐目录与占位文件（只创建不覆盖）
+│   ├── tools.mjs                    whale_meme 的 11 个 action
 │   ├── scaffold.mjs                 新任务骨架
-│   └── index.mjs                    DSH 接线：工具注册、技能注册、契约注入
+│   └── index.mjs                    DSH 接线：工具注册、技能注册、契约注入、子进程适配
 ├── assets/skill/whale-meme-workflow/SKILL.md
 ├── scripts/
 │   ├── install.ps1                  装进 profile（带备份、可回滚）
 │   ├── uninstall.ps1                从 profile 卸载
 │   ├── patch-profile.mjs            Node 精确改写 profile 清单
 │   └── selftest.mjs                 对真实工作区跑自检
-└── test/                            三层测试
+└── test/                            四组测试（core / plugin-smoke / features / integration）
 ```
 
 ## 授权与参与

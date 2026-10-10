@@ -115,18 +115,27 @@ datas/  ① 资料基准 ──► texts/  ② 提示词 ──► _tools/payloa
 | 你想做的事 | 用哪个 |
 |---|---|
 | 不知道现在能做啥 | `whale_meme(action="status")` |
+| 工作区还缺哪些目录/文件 | `whale_meme(action="init")`（dry-run）→ 确认后 `write=true` |
 | 这个任务的台词是什么、哪几个字加粗 | `whale_meme(action="task", task="task01")` |
 | 投喂文本有没有被改过 | `whale_meme(action="payload", task="task01")` |
+| 负载要重建 | `whale_meme(action="build", task="task01")`（dry-run）→ `write=true` |
+| 换画风/尺寸/质量档/透明底/附加要求 | `whale_meme(action="preview", …, style="chibi-sticker", extra=["…"])` |
+| 看这次到底要喂什么提示词 | 同上，返回里的 `preview` 字段就是完整提示词正文 |
+| 确认后直接出图 | `whale_meme(action="render", confirm=true, token="…")` |
 | 产物到底是用哪份提示词出的 | `whale_meme(action="lineage", task="task01")` |
 | 出的图尺寸/透明通道对不对 | `whale_meme(action="outputs", task="task01")` |
-| 下一步该敲哪条命令 | `whale_meme(action="commands", step="upper")` |
+| 下一步该敲哪条命令（不想让插件出图） | `whale_meme(action="commands", step="upper")` |
 | 开一个新任务（骨架） | `whale_meme(action="scaffold", title="题材")` — 默认只出计划，加 `write=true` 才落盘 |
 
 ---
 
-## 8. 新任务的开局（`scaffold`）
+## 8. 新任务的开局（`scaffold` + `init`）
 
 ```jsonc
+// 工作区缺目录时先补齐（只创建、不覆盖，默认 dry-run）
+{ "action": "init" }                 // 看将创建什么
+{ "action": "init", "write": true }  // 真正创建
+
 // 第一步：只看计划，不写任何文件
 { "action": "scaffold", "title": "程序员自嘲梗" }
 
@@ -134,18 +143,126 @@ datas/  ① 资料基准 ──► texts/  ② 提示词 ──► _tools/payloa
 { "action": "scaffold", "title": "程序员自嘲梗", "write": true }
 ```
 
-它按现有最大任务号 +1 建 `texts/taskNN_<标题>/`，一次写齐六个文件（五件套 + 本目录 README），
-并且**拒绝覆盖已占用的任务号**——工作流规定「只新建 `taskNN_*`，不改动已有任务」。
+`init` 补齐 `datas/01_character`、`datas/02_reference_stickers`、`texts`、`outs`、`_tools/payloads`、`.whale`
+与工作区 README、`outs/INDEX.csv` 占位；**已存在的文件一字不改**，`_tools/` 下的脚本一律不碰。
 
-骨架里已经预填：角色剪影三要素、两个模型的透明底/质量档差异、编辑链三步模板、
-7 条环境坑、验收五组（含加粗范围与全角句号）、合规署名与许可。
+`scaffold` 按现有最大任务号 +1 建 `texts/taskNN_<标题>/`，一次写齐六个文件（五件套 + 本目录 README），
+并且**拒绝覆盖已占用的任务号**。
 
 创建后必须手工完成的三件事：
 
 1. 把 `00_分镜与文案锁定.md` 的**逐字文案定稿**：标记行只用于分组，整行括号只写加粗要求，句末用全角句号。
    （`whale_meme(action="task")` 会用同一套解析器复核你的格式，句末缺标点会直接点名。）
-2. 改 `_tools/build_payloads.py` 顶部的 `TASK` / `OUT` 常量为新任务路径，再跑 `step="build"`。
+2. 在 `.whale/manifest.json` 里给这个任务补一段 `extraction` 计划（见下节），然后 `build`。
 3. 在 `texts/README.md` 的任务索引追加一行。
 
 > 顺序不要颠倒：**文案定稿 → 抽负载 → 出图**。先出图再改文案，已经出的图就和负载对不上血缘了。
+
+---
+
+## 9. 投喂负载：`build` 与 `extraction` 计划
+
+`_tools/build_payloads.py` 的任务路径是**写死的字面量**，换任务就得改脚本 —— 而脚本是工作区自己的资产，
+插件不该改。所以负载重建走 `.whale/manifest.json` 里的**抽取计划**：
+
+```jsonc
+{
+  "id": "task02",
+  "dirName": "task02_程序员自嘲梗",
+  "extraction": {
+    "payloads": [
+      { "file": "10_母图_中性站姿.txt", "from": "02_提示词_GPT-Image-2.5.md", "block": 2,
+        "source": "02_…§3 第0步（逐字）", "assert": "中性站姿全身母图" }
+    ]
+  }
+}
+```
+
+- `block` 是 markdown 代码围栏的**序号（从 0 开始）**；`build_payloads.py` 的既有映射是
+  `0=参数 / 1=整图主提示词 / 2=母图 / 3=上格 / 4=下格`。
+- `assert` 是**防错位的断言短语**：那一块里必须出现它，否则拒绝抽取。**别省这个字段**
+  —— 索引错位抽错内容，代价是一次付费出图。
+- 抽取口径与既有脚本一致：只做换行归一化，结尾保证一个换行，sha256 对磁盘字节取。
+  **可机器验证**：拿既有 task01 的索引比对，7 份负载 sha256 逐一相同。
+
+```jsonc
+{ "action": "build", "task": "task02" }                 // dry-run：只算 sha，不落盘
+{ "action": "build", "task": "task02", "write": true }  // 落盘并重建 _payload_index.json
+```
+
+---
+
+## 10. 文本之外的要求与提示词预览（`preview`）
+
+工作流原本只有文案可调。`preview` 让你在出图前把**非文本要求**规范化，并看到**最终要喂的完整提示词**。
+
+```jsonc
+{
+  "action": "preview",
+  "task": "task02",
+  "step": "whole",              // whole / mother / upper / lower
+  "style": "chibi-sticker",     // 画风预设，见下
+  "size": "1024x1024",
+  "quality": "xhigh",
+  "background": "transparent",  // 只对 gpt-image-2.5 系有效
+  "palette": ["深藏青为主", "避开发灰的蓝"],
+  "extra": ["尾鳍不要有白斑", "气泡距顶端至少 5% 高度"],
+  "avoid": ["第二个人物", "真人照片元素"],
+  "panels": 1,
+  "label": "贴纸版"
+}
+```
+
+**画风预设**：`anime-cel`（日系 Q 版赛璐璐，工作区默认）/ `chibi-sticker`（Q 版贴纸单格，强制 1024²）/
+`watercolor` / `flat-vector` / `pixel-art` / `retro-anime-90s`。也可以直接传自定义画风描述文本。
+不在预设表里但像风格描述的，会降级成自定义并给出提示；完全不像的会被拒绝。
+
+**三条设计约束**（预览里能直接看出来）：
+
+1. **不重写基础提示词**。画风与要求一律以「追加段落」加在原文之后，原文逐字保留 —— 
+   这样你能一眼看出加了什么，而不是原文被搅碎。
+2. **禁止项改写成正向句子**。两个图像模型都**没有负向词参数**，所以「不要第二个人物」
+   会被写成「画面中不要出现第二个人物；如果可能，请改为更合适的画法」。
+3. **凭据与「官方」措辞会被直接拒绝**：前者不该进提示词，后者违反验收清单 E 组的合规底线。
+
+预览返回 `planSummary`（结构化参数）、`preview`（人读全文，含提示词正文与 sha256）、
+`token`（确认令牌）与 `styles`（可用画风清单）。
+
+---
+
+## 11. 确认后直接出图（`render`）
+
+出图**有费用、有副作用**，所以这一层的设计原则是「默认什么都不做」：
+
+```jsonc
+// 1) 先预览，拿到 token
+{ "action": "preview", "task": "task02", "style": "anime-cel", "extra": ["尾鳍不要有白斑"] }
+
+// 2) 看完预览确认无误，带 confirm + token 再调
+{ "action": "render", "task": "task02", "style": "anime-cel", "extra": ["尾鳍不要有白斑"],
+  "confirm": true, "token": "<preview 返回的令牌>" }
+```
+
+门禁规则（每一条都有测试守着）：
+
+| 规则 | 说明 |
+|---|---|
+| 默认不出图 | 不带 `confirm: true` 时只返回计划，**绝不触发子进程** |
+| 必须有令牌 | 令牌由 `preview` 发出；`render` 内部**不重新发令牌**（否则会把用掉的令牌复活） |
+| 令牌一次性 | 用掉即失效，重复使用会被拒 |
+| 计划一变就失效 | 令牌把「任务/步骤/模型/档位/尺寸/背景/输入图/提示词 sha256/产出文件名」一起哈希，任一变化都对不上 |
+| 10 分钟有效 | 过期必须重新预览 |
+| 每张一次调用 | 不支持批量；批次由调用方一张张来，费用可控 |
+| 失败不自动重试 | 重试要重新确认，避免重复计费 |
+
+执行时：把提示词写到 `outs/<task>/<model>/_prompt/<产出名>__<sha8>.txt`，**落盘后再核一次 sha256**，
+然后调用工作区既有的 `_tools/whale_image_client.py`（gen / edit）。HTTP 重试、签名 URL 立即下载、
+浏览器 UA 这些坑全部交给那份脚本，插件不重复实现。
+
+出图后返回 `output`（路径/字节）、`meta`（模型/尺寸/档位/透明底，以及
+**元数据里的 `prompt.sha256` 是否与本次计划一致** —— 投喂零改写的机器证据）、
+以及 `stdoutTail` / `stderrTail`。
+
+> 宿主没有子进程能力时，`render` 会明确拒绝并让你改用 `commands` 拿命令自己执行 —— 不会静默失败。
+
 

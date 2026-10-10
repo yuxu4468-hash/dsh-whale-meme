@@ -6,12 +6,51 @@
 
 ## [Unreleased]
 
+暂无。
+
+## [0.2.0] - 2026-10-11
+
+四项能力扩展：自动创建目录、提示词预览、确认后直接出图、文本之外的其它要求。
+
 ### Added
 
-- README 新增「使用说明」一节：面向使用者的分步指引，含 7 个场景（重启后自检、`status` 摸清现状、
-  出图前的 `task` + `payload`、`commands` 取出图命令、`lineage` + `outputs` 验收、
-  `scaffold` 开新任务、可直接抄的问法），每节都给出**真实返回片段**与「看哪个字段」，
-  并单列「它不会做的事」。
+- **`init`**：补齐工作区缺的目录与占位文件（`datas/01_character`、`datas/02_reference_stickers`、
+  `texts`、`outs`、`_tools/payloads`、`.whale`、工作区 README、`outs/INDEX.csv`）。
+  只创建、不覆盖；`_tools/` 下的脚本一律不碰；默认 dry-run。
+- **`preview`**：把「文本之外的要求」规范化并组装出最终提示词预览，给出确认令牌。
+  支持画风预设（`anime-cel` / `chibi-sticker` / `watercolor` / `flat-vector` / `pixel-art` /
+  `retro-anime-90s`）、尺寸、质量档、透明底、配色、附加要求、禁止项、分格数、文件名标签。
+  基础提示词逐字保留，要求以追加段落加在之后；禁止项改写成正向句子（两个模型都没有负向词参数）；
+  凭据类与「官方」措辞类要求被直接拒绝。
+- **`build`**：按 `.whale/manifest.json` 里的 `extraction` 计划从 `texts/` 逐字重建投喂负载。
+  换任务只改清单，`_tools/build_payloads.py` 一个字节都不用动；带 `assert` 断言防索引错位，
+  断言失败时**一个文件都不写**。落盘口径与既有脚本完全一致（已用 task01 的 7 份负载逐一比对 sha256 验证）。
+- **`render`**：确认后直接出图。默认只返回计划；必须 `confirm: true` + `preview` 发的令牌才真正调用。
+  令牌一次性、10 分钟有效、计划任一字段变化即失效。执行走工作区既有 `_tools/whale_image_client.py`，
+  提示词落盘后再核一次 sha256，并回报客户端元数据里的 `prompt.sha256` 是否与计划一致。
+- **`.whale/manifest.json`**：工作区清单，记录目录树与各任务的负载抽取计划。只存可从磁盘重建的事实，
+  不存内容副本、不存凭据。
+- README 新增「工具：`whale_meme`」的分组说明（只读 / 会写盘 / 预览与出图）与门禁规则表。
+- 技能正文新增第 8~11 节：新任务开局、`extraction` 计划写法、非文本要求与三条设计约束、出图门禁。
+- 测试从 3 组扩到 4 组（新增 `test/features.test.mjs`，46 项），共 106 项。
+
+### Changed
+
+- `build` 的负载重建不再依赖工作区里写死任务路径的 `build_payloads.py`，改由清单驱动。
+- `inject` 刻意**不包含** `subprocess`：它是 `render` 才需要的可选能力，
+  列为必需会让插件在缺少该服务的宿主上整个保持 pending，连只读工具都装不上。
+
+### Fixed
+
+开发过程中定位并修掉的问题（都由测试抓住，一并记录以便复现同类缺陷）：
+
+- **令牌复活漏洞**：`render` 内部会调用预览逻辑，而预览会为同一份计划**重新发出同一个令牌**，
+  导致「用过的令牌」被复活、可重复出图。改为组装计划与发令牌彻底分离，`render` 内部绝不发令牌。
+- **`quality` 被静默忽略**：`buildRenderPlan` 只在 `requirements` 里读 `quality`/`size`/`background`，
+  写在顶层时会被忽略并退回默认档 —— 即「确认的是 high、出的是 xhigh」。改为两处都读。
+- **`panels: null` 被误判为非法值**：`null` 与 `undefined` 都表示「未指定」，只有真给数字才校验。
+- **`MANIFEST_RELATIVE` 导入错位**：该常量在 `core.mjs` 而 `workspace.mjs` 从 `manifest.mjs` 导入，
+  导致模块加载失败。
 
 ## [0.1.0] - 2026-10-10
 
