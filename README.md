@@ -1,7 +1,33 @@
 # dsh-whale-meme
 
+把**表情包绘制工作区**的工作流固化成一个可安装的 [DeepSeek Harness](https://deepseek.com)（DSH）插件：
+一个 11 个 action 的校验／预览／出图工具，加一份工作流技能。
+
 > **这个仓库只有代码和文档。** 不含任何角色立绘、参考语料、出图产物或提示词成品。
-> 角色与语料的授权见 [NOTICE.md](NOTICE.md)——它们仍然只归原作者与二次设计者。
+> 角色与语料的授权见 [NOTICE.md](NOTICE.md) —— 它们仍然只归原作者与二次设计者。
+
+- **授权**：[CC0 1.0 Universal](LICENSE)（公有领域奉献）
+- **依赖**：无第三方运行时依赖，只用 Node 内置模块
+- **构建**：无构建步骤，`lib/*.mjs` 是原生 ESM
+
+---
+
+## 目录
+
+- [它解决什么问题](#它解决什么问题)
+- [三步上手](#三步上手)
+- [安装](#安装)
+- [工具：`whale_meme`](#工具whale_meme)
+- [技能：`whale-meme-workflow`](#技能whale-meme-workflow)
+- [配置](#配置)
+- [工作区约定](#工作区约定)
+- [开发](#开发)
+- [设计取舍](#设计取舍)
+- [常见问题](#常见问题)
+- [文件结构](#文件结构)
+- [授权与参与](#授权与参与)
+
+---
 
 ## 它解决什么问题
 
@@ -12,10 +38,30 @@
 
 | | 内容 | 形态 |
 |---|---|---|
-| 可判定 | 工作区结构、逐字文案、投喂负载是否被改写、产物血缘、产物尺寸与透明通道 | `whale_meme` 工具的 7 个 action |
+| 可判定 | 工作区结构、逐字文案、投喂负载是否被改写、产物血缘、产物尺寸与透明通道 | `whale_meme` 工具的 11 个 action |
 | 不可判定 | 角色五要素是否保住、情绪反转是否成立、排版是否合规、合规边界 | `whale-meme-workflow` 技能正文 |
 
 工作流里的代价是真实的：一条硬规则漏掉，就是一次付费出图调用。
+
+## 三步上手
+
+装好并重启之后（见[安装](#安装)），三步就能跑起来：
+
+```jsonc
+// ① 看现状：工作区在哪、缺什么、各任务什么状态
+{ "action": "status" }
+
+// ② 出图前拿到唯一权威文案与「投喂文本有没有被改过」的证据
+{ "action": "task",    "task": "task01" }
+{ "action": "payload", "task": "task01" }
+
+// ③ 换画风、加要求、看最终提示词；确认后才出图
+{ "action": "preview", "task": "task01", "style": "watercolor", "extra": ["尾鳍不要有白斑"] }
+{ "action": "render",  "task": "task01", "style": "watercolor", "extra": ["尾鳍不要有白斑"],
+  "confirm": true, "token": "<preview 返回的令牌>" }
+```
+
+不想让插件出图，就用 `{ "action": "commands", "step": "whole" }` 拿命令自己执行。
 
 ## 安装
 
@@ -136,159 +182,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\uninstall.ps1"
 2. **禁止项改写成正向句子** —— 两个图像模型都没有负向词参数；
 3. **凭据与「官方」措辞被直接拒绝** —— 前者不该进提示词，后者违反合规底线。
 
-## 技能：`whale-meme-workflow`
-
-正文在 [`assets/skill/whale-meme-workflow/SKILL.md`](assets/skill/whale-meme-workflow/SKILL.md)，包含：
-
-- 四段流水线与各阶段唯一写入者
-- 两个图像模型的差异表（透明底、质量档、编辑保持能力）
-- 「立绘 → Q 版母图 → 上格 → 下格」编辑链，以及为什么第 0 步不能省
-- 7 条本机实测环境坑（签名 URL 过期、下载需浏览器 UA、pwsh 不能内联中文等）
-- 验收五组与合规底线
-- 新任务开局：`init` 补目录 → `scaffold` 建骨架 → 文案定稿 → `build` 抽负载
-- `extraction` 抽取计划的写法与 `assert` 断言防错位的原因
-- `preview` 的非文本要求清单与三条设计约束
-- `render` 的门禁规则表
-
-## 使用说明
-
-这个插件没有可点的界面——它**通过对话使用**：你用自然语言说要干什么，代理去调 `whale_meme`。
-所以下面每节都是「你说什么 → 会发生什么 → 结果里看哪个字段」。
-
-### 0. 重启后先确认它活着
-
-在会话里说：
-
-> 这个工作区怎么工作？
-
-- 命中了 `whale-meme-workflow` 技能 → 技能注册成功，你会拿到四段流水线、模型差异表、编辑链与环境坑。
-- 再让它调一次 `whale_meme(action="status")` → 工具注册成功。
-
-两个都通，才算装好了。没反应就是没重启，见下面「常见问题」。
-
-### 1. 摸清现状：`status`
-
-> 现在这个工作区是什么状态？
-
-返回里看这几个字段：
-
-| 字段 | 看什么 |
-|---|---|
-| `root` | 插件认到的工作区根目录。**不对就是定位错了**，用 `DSH_WHALE_ROOT` 纠正 |
-| `taxonomy[].exists` | 四个阶段目录（`datas`/`texts`/`_tools/payloads`/`outs`）是否都在 |
-| `tasks[].missingTextsFiles` | 某个任务缺哪份提示词文件；空数组 = 五件套齐全 |
-| `tasks[].payloads` | 该任务已抽取的投喂负载份数 |
-| `tasks[].models[].deliverables` | 每个模型有没有推荐交付件 |
-| `tasks[].warnings` | 缺 `checks.json`、缺推荐交付件之类的提醒 |
-
-真实返回（task01）：
-
-```json
-{ "root": "F:\\whale meme",
-  "tasks": [{ "id": "task01", "textsFilesPresent": 5, "textsFilesTotal": 5,
-              "missingTextsFiles": [], "payloads": 7, "warnings": [] }] }
-```
-
-> 它只报告，不修。修是你的事。
-
-### 2. 出图前必做两件事：`task` + `payload`
-
-**先说「这个任务的台词是什么」**（`task`）——出图阶段唯一权威文本：
-
-```json
-{ "storyboard": {
-    "lines": [
-      { "marker": "格 1（上格）", "text": "我的字符串替换把脚本改坏了。我直接读取并修复。" },
-      { "marker": "格 2（下格）", "text": "文件被我的替换操作整篇损坏。" } ],
-    "boldHints": ["整篇损坏"],
-    "warnings": [] } }
-```
-
-`lines[].text` **原样照抄**，一个字都不能改；`boldHints` 列出的字必须加粗，且只有这些字加粗。
-`warnings` 非空（比如「没有以句末标点结尾」）说明你的 `00_*` 写得有问题，先改文案再出图。
-
-**再说「投喂文本有没有被改过」**（`payload`）——这一步能省下一次付费出图：
-
-```json
-{ "summary": { "total": 7, "ok": 7, "drift": 0, "sourceDrift": 0, "missing": 0 },
-  "entries": [{ "file": "10_母图_中性站姿.txt",
-                "recordedSha256": "6a47656131dd…", "actualSha256": "6a47656131dd…",
-                "source": "02_提示词_GPT-Image-2.5.md §3 第0步（逐字）",
-                "matchesRecord": true, "matchesTextSource": true, "status": "ok" }] }
-```
-
-`status` 必须是 `ok`：
-
-| 非 ok 值 | 含义 | 怎么办 |
-|---|---|---|
-| `payload-drift` | 磁盘上的负载与索引记录不符 → 被手打改写过 | 重跑抽取，别用它出图 |
-| `source-drift` | 负载正文已不在它声称的来源文件里 → 上游 `texts/` 改了没重建 | 重建负载 |
-| `missing` | 负载文件或索引没了 | 先跑 `commands(step="build")` |
-
-### 3. 出图：先拿命令，再执行
-
-**这个插件不会替你出图**——出图有费用、有副作用。它只给命令：
-
-> 出图第一步该敲什么？
-
-`whale_meme(action="commands", step="mother")` 返回可直接粘贴的 PowerShell 命令，
-外加该步的注意事项（例如「第 0 步不能省：立绘是成熟比例，直接用立绘做后两格的输入会继承御姐比例」）。
-`step` 可取：`build` / `mother` / `upper` / `lower` / `whole` / `compose` / `check` / `index`。
-
-省略 `model` 时按步骤给推荐值（出图类默认 `gpt-image-2.5-sunburst`，定稿档 `xhigh`）。
-要换模型或档位就明说：
-
-> 用 gpt-image-2 出，high 档
-
-### 4. 出完图：`lineage` + `outputs`
-
-**`lineage` 回答「这张图到底是用哪份提示词出的」**：
-
-```json
-{ "rows": [{ "model": "gpt-image-2", "image": "02_上格_自信_1024.png",
-             "promptSha256": "fb8daccebd30…", "payload": "11_上格_编辑.txt", "status": "ok" }] }
-```
-
-- `status: ok` + `payload` 有值 → 血缘清楚，可追溯到具体负载文件。
-- `unknown-prompt` → 该产物用的负载**已不在索引里**（负载被重建过，或当初是手打投喂的）。这是要警惕的信号。
-- `no-metadata` → 该产物没有 `.json` 元数据。**本地拼合产物（`04_拼合_*.png`）属于正常**，
-  因为 `compose_panels.py` 不写元数据；其它文件出现这个就说明出图流程漏了元数据。
-
-**`outputs` 回答「尺寸和透明通道对不对」**：
-
-```json
-{ "images": [{ "file": "05_整图一次出图_1024x1536.png", "size": "1024x1536",
-               "bytesHuman": "1.87 MB", "alphaChannel": false,
-               "deliverable": true, "quality": "high", "background": "opaque" }] }
-```
-
-`alphaChannel` 来自 PNG 头的**直接解析**，不是猜的：`false` 就是真的没有透明通道，要透明贴纸得走
-`gpt-image-2.5-sunburst` + `background: transparent`。`deliverable: true` 标出的是推荐交付件。
-
-> ⚠️ `outputs` 只做**机械**检查。中文逐字、加粗范围、角色五要素、情绪反差**必须人眼放大到 200% 核对**，
-> 机械检查不能替代 `04_验收清单.md`。
-
-### 5. 开新任务：`scaffold`（两步走）
-
-> 帮我开一个新任务：题材是「改需求改到崩溃」
-
-它**默认只出计划、不写任何文件**：
-
-```json
-{ "dryRun": true, "wrote": false,
-  "plan": { "taskId": "task02", "dirName": "task02_改需求改到崩溃",
-            "files": ["00_分镜与文案锁定.md", "01_提示词_GPT-Image-2.md", "02_提示词_GPT-Image-2.5.md",
-                      "03_无字底图与后期排版兜底.md", "04_验收清单.md", "README.md"] } }
-```
-
-看过路径和文件名没问题，再说「确认创建」——代理会带 `write: true` 重调，才真正落盘。
-
-如果任务号已被占用，它会**直接拒绝**（`ok: false`，错误信息里列出冲突路径），不会覆盖你已有的任务。
-
-创建后还有三件手工活（技能正文里有详述）：**逐字文案定稿 → 抽负载 → 才算能出图**。
-顺序别颠倒：先出图再改文案，已出的图就和负载对不上血缘了。
-
-### 6. 可以直接抄的问法
+### 可以直接抄的问法
 
 ```
 这个工作区怎么工作？
@@ -304,7 +198,7 @@ task01 的台词是什么？哪几个字要加粗？
 帮我开一个新任务：题材是「……」
 ```
 
-### 7. 边界：它会做什么、不会做什么
+### 边界：它会做什么、不会做什么
 
 | | 说明 |
 |---|---|
@@ -319,6 +213,20 @@ task01 的台词是什么？哪几个字要加粗？
 
 > 出图的费用与副作用由**调用方**承担：每确认一次 = 一次付费调用。插件把「确认」做成了一次性的令牌，
 > 而不是一个可以复用的开关。
+
+## 技能：`whale-meme-workflow`
+
+正文在 [`assets/skill/whale-meme-workflow/SKILL.md`](assets/skill/whale-meme-workflow/SKILL.md)，包含：
+
+- 四段流水线与各阶段唯一写入者
+- 两个图像模型的差异表（透明底、质量档、编辑保持能力）
+- 「立绘 → Q 版母图 → 上格 → 下格」编辑链，以及为什么第 0 步不能省
+- 7 条本机实测环境坑（签名 URL 过期、下载需浏览器 UA、pwsh 不能内联中文等）
+- 验收五组与合规底线
+- 新任务开局：`init` 补目录 → `scaffold` 建骨架 → 文案定稿 → `build` 抽负载
+- `extraction` 抽取计划的写法与 `assert` 断言防错位的原因
+- `preview` 的非文本要求清单与三条设计约束
+- `render` 的门禁规则表
 
 ## 配置
 
@@ -344,6 +252,7 @@ task01 的台词是什么？哪几个字要加粗？
 
 ```
 <工作区根>/
+├── .whale/manifest.json        工作区清单：目录树 + 各任务的负载抽取计划
 ├── datas/                      角色与参考资料（只读基准）
 │   └── 01_character/           人设速查 + 原始立绘
 ├── texts/                      成品提示词（一个任务一个 taskNN_* 目录）
@@ -363,20 +272,47 @@ task01 的台词是什么？哪几个字要加粗？
 `_tools/whale_image_client.py`、`_tools/payloads/`、`datas/01_character/`、`texts/README.md`、`outs/INDEX.csv`。
 判据刻意宽松但不至于误判普通目录；不匹配时用 `DSH_WHALE_ROOT` 显式指定。
 
+目录缺失时用 `{ "action": "init" }` 补齐（先看计划，再 `write: true`）。
+
+### 投喂负载的抽取计划
+
+`.whale/manifest.json` 里为每个任务记录一段 `extraction` 计划，
+让 `build` 能**不依赖工作区那份写死任务路径的 `build_payloads.py`** 重建负载：
+
+```jsonc
+{
+  "id": "task01",
+  "dirName": "task01_字符串替换把脚本改坏了",
+  "extraction": {
+    "payloads": [
+      { "file": "10_母图_中性站姿.txt", "from": "02_提示词_GPT-Image-2.5.md", "block": 2,
+        "source": "02_…§3 第0步（逐字）", "assert": "中性站姿全身母图" }
+    ]
+  }
+}
+```
+
+- `block` 是 markdown 代码围栏的**序号（从 0 开始）**；
+- `assert` 是**防错位的断言短语**，那一块里必须出现它，否则拒绝抽取。**别省这个字段**
+  —— 索引错位抽错内容，代价是一次付费出图；
+- 抽取口径与既有脚本一致（只做换行归一化、结尾一个换行、sha256 对磁盘字节取）。
+  已用 task01 的 7 份负载逐一比对验证过：**sha256 全部相同**。
+
 ## 开发
 
 ```bash
-node --test --test-concurrency=1 test/core.test.mjs test/plugin-smoke.test.mjs test/integration.test.mjs
+node --test --test-concurrency=1 test/core.test.mjs test/plugin-smoke.test.mjs test/features.test.mjs test/integration.test.mjs
 node scripts/selftest.mjs          # 对真实工作区跑全部 action 并断言结论
 node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全部通过
 ```
 
-三层测试各管一段：
+四组测试各管一段：
 
 | 文件 | 管什么 | 是否需要真实工作区 |
 |---|---|---|
 | `test/core.test.mjs` | 纯逻辑：解析、抽取、审计、命令生成、scaffold（跑在临时夹具上） | 否 |
 | `test/plugin-smoke.test.mjs` | 宿主接线：工具注册、技能注册、契约注入、缺注册表时只告警不抛错（假 Cordis 上下文） | 否 |
+| `test/features.test.mjs` | 非文本要求、提示词组装、出图计划与令牌门禁、init、负载重建 | 否 |
 | `test/integration.test.mjs` | 真实工作区上的结论是否正确 | 是，不在时自动跳过 |
 
 **没有构建步骤**：`lib/*.mjs` 是原生 ESM，DSH 直接加载。代价是没有静态类型，收益是不存在
@@ -392,7 +328,6 @@ node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全�
   整个保持 pending —— 连只读工具都装不上，这比「出图不可用」糟糕得多。
 - **契约注入是加分项**：宿主没有可用入口时只写一条 debug 日志；契约内容同时内嵌在技能正文里，不会丢。
 - **出图默认什么都不做**：`render` 不带 `confirm` 时绝不触发子进程；令牌一次性、计划一变即失效。
-  出图有费用、有副作用，所以宁可多一步确认。
 - **写盘动作一律默认 dry-run**：`scaffold` / `init` / `build` 都要显式 `write: true`。
 - **不重复实现 HTTP**：出图走工作区既有的 `_tools/whale_image_client.py`，
   重试、签名 URL 过期、浏览器 UA 这些坑留在那一处。
@@ -415,13 +350,13 @@ node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全�
 | `render` 说宿主没有子进程能力 | 用 `commands` 拿命令自己执行（插件明确拒绝，不会静默失败） |
 | `preview` 说「拿不到基础提示词」 | 该任务缺 `02_提示词_*.md`，或用 `rawPrompt` 直接给提示词正文 |
 
-## 目录
+## 文件结构
 
 ```
 .
 ├── package.json                     dsh.bundle.patch 指向 cordis.patch.yml
 ├── cordis.patch.yml                 bundle 层默认配置
-├── LICENSE                          MIT（仅覆盖本插件的代码与文档）
+├── LICENSE                          CC0 1.0 Universal（公有领域奉献）
 ├── NOTICE.md                        授权边界：什么不属于本仓库、归谁
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
@@ -449,46 +384,12 @@ node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全�
 
 ## 授权与参与
 
-- [LICENSE](LICENSE) — MIT，只覆盖本插件的**代码与文档**
-- [NOTICE.md](NOTICE.md) — 角色、语料、产物的授权**不随本插件走**，归原作者
+- [LICENSE](LICENSE) — **CC0 1.0 Universal**：本仓库的原创代码与文档已贡献到公有领域，
+  可自由使用、修改、再分发，**无需署名**（CC0 不放弃商标权与专利权，见其第 4(a) 条）
+- [NOTICE.md](NOTICE.md) — 角色、语料、产物的授权**不随本插件走**，归原作者；
+  本仓库刻意不含任何素材
 - [CONTRIBUTING.md](CONTRIBUTING.md) — 改动约定（先写反例测试、保持只读、不引依赖）
 - [SECURITY.md](SECURITY.md) — 攻击面与私密报告方式
 - [CHANGELOG.md](CHANGELOG.md) — 版本变化
-
-## 发布前检查清单
-
-这个仓库已发布在 <https://github.com/yuxu4468-hash/dsh-whale-meme>。下面保留清单，方便**你 fork 后重新发布**：
-
-1. ~~补仓库地址~~ **已完成**：`package.json` 的 `repository`/`bugs`/`homepage` 已指向
-   `yuxu4468-hash/dsh-whale-meme`，`CHANGELOG.md` 底部链接也已换成真实账号。
-   若你改了仓库名，这几处要一起改。
-2. **确认 `LICENSE` 的版权行**：现在是 `Copyright (c) 2026 dsh-whale-meme contributors`，
-   按你的意愿换成真名或组织名。
-3. **确认授权边界**：读一遍 [NOTICE.md](NOTICE.md)。目前的口径是「本插件代码 MIT，
-   角色与工作区素材不随本插件走、归原作者 上善无形 / ZipZipPipe，产出默认非商业 CC BY-NC-SA 4.0」。
-   如果你希望整仓采用别的许可（例如 GPL-3.0 或与产出一致的 CC BY-NC-SA 4.0），改 `LICENSE` 与 `package.json` 的
-   `license` 字段即可——但**不要把素材放进仓库**来「统一许可」。
-4. **跑一遍 CI 里的每一步**（本机实测命令，Windows PowerShell）：
-
-   ```powershell
-   node -e "const p=require('./package.json');process.exit(Object.keys(p.dependencies||{}).length)"
-   node --test --test-concurrency=1 test/core.test.mjs test/plugin-smoke.test.mjs
-   node --test --test-concurrency=1 test/integration.test.mjs
-   node --check lib/core.mjs   # 对每个 .mjs 都跑一遍
-   ```
-
-5. **确认没有个人凭据/路径被带进去**：
-
-   ```powershell
-   Select-String -Path lib/*.mjs,scripts/*.mjs,test/*.mjs,*.md -Pattern 'C:\\Users|credentials|api[_-]?key|token' 
-   ```
-
-   预期结果：除了 `scripts/patch-profile.mjs` 里解析 `--token` 参数的局部变量名，以及
-   `SECURITY.md` 里对该变量的说明以外，**不应命中任何真实路径或凭据**。
-
-6. **别把工作区一起推上去**：仓库根就是这个 `dsh-whale-meme` 目录，不是 `F:\whale meme`。
-   如果你更喜欢把插件放在工作区仓库的子目录里，请先确认 `.gitignore` 挡住了 `datas/`、`texts/`、`outs/`。
-
-## 声明
 
 本项目与 DeepSeek 官方无关。「DeepSeek Harness」「DSH」是其各自权利人的名称，此处仅用于说明兼容性。
