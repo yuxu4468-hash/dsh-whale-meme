@@ -1076,7 +1076,7 @@ node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全�
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── SECURITY.md                      攻击面说明（能读什么、能写什么、不做什么）
-├── .github/workflows/ci.yml         无依赖校验 + 六组测试 + 脚本语法检查
+├── .github/workflows/ci.yml         无依赖校验 + 七组测试 + 脚本语法检查
 ├── lib/
 │   ├── core.mjs                     工作区定位、任务发现、文案解析、负载/血缘/产物校验
 │   ├── commands.mjs                 逐字复现命令 + 模型档案 + 环境规则
@@ -1097,7 +1097,7 @@ node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全�
 │   ├── uninstall.ps1                从 profile 卸载
 │   ├── patch-profile.mjs            Node 精确改写 profile 清单
 │   └── selftest.mjs                 对真实工作区跑自检
-└── test/                            六组测试（core / plugin-smoke / features / reply / extensions / integration）
+└── test/                            七组测试（core / plugin-smoke / features / reply / extensions / natural / integration）
 ```
 
 ## 授权与参与
