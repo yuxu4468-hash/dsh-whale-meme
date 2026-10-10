@@ -92,6 +92,168 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\uninstall.ps1"
 - 验收五组与合规底线
 - 新建任务的开局顺序
 
+## 使用说明
+
+这个插件没有可点的界面——它**通过对话使用**：你用自然语言说要干什么，代理去调 `whale_meme`。
+所以下面每节都是「你说什么 → 会发生什么 → 结果里看哪个字段」。
+
+### 0. 重启后先确认它活着
+
+在会话里说：
+
+> 这个工作区怎么工作？
+
+- 命中了 `whale-meme-workflow` 技能 → 技能注册成功，你会拿到四段流水线、模型差异表、编辑链与环境坑。
+- 再让它调一次 `whale_meme(action="status")` → 工具注册成功。
+
+两个都通，才算装好了。没反应就是没重启，见下面「常见问题」。
+
+### 1. 摸清现状：`status`
+
+> 现在这个工作区是什么状态？
+
+返回里看这几个字段：
+
+| 字段 | 看什么 |
+|---|---|
+| `root` | 插件认到的工作区根目录。**不对就是定位错了**，用 `DSH_WHALE_ROOT` 纠正 |
+| `taxonomy[].exists` | 四个阶段目录（`datas`/`texts`/`_tools/payloads`/`outs`）是否都在 |
+| `tasks[].missingTextsFiles` | 某个任务缺哪份提示词文件；空数组 = 五件套齐全 |
+| `tasks[].payloads` | 该任务已抽取的投喂负载份数 |
+| `tasks[].models[].deliverables` | 每个模型有没有推荐交付件 |
+| `tasks[].warnings` | 缺 `checks.json`、缺推荐交付件之类的提醒 |
+
+真实返回（task01）：
+
+```json
+{ "root": "F:\\whale meme",
+  "tasks": [{ "id": "task01", "textsFilesPresent": 5, "textsFilesTotal": 5,
+              "missingTextsFiles": [], "payloads": 7, "warnings": [] }] }
+```
+
+> 它只报告，不修。修是你的事。
+
+### 2. 出图前必做两件事：`task` + `payload`
+
+**先说「这个任务的台词是什么」**（`task`）——出图阶段唯一权威文本：
+
+```json
+{ "storyboard": {
+    "lines": [
+      { "marker": "格 1（上格）", "text": "我的字符串替换把脚本改坏了。我直接读取并修复。" },
+      { "marker": "格 2（下格）", "text": "文件被我的替换操作整篇损坏。" } ],
+    "boldHints": ["整篇损坏"],
+    "warnings": [] } }
+```
+
+`lines[].text` **原样照抄**，一个字都不能改；`boldHints` 列出的字必须加粗，且只有这些字加粗。
+`warnings` 非空（比如「没有以句末标点结尾」）说明你的 `00_*` 写得有问题，先改文案再出图。
+
+**再说「投喂文本有没有被改过」**（`payload`）——这一步能省下一次付费出图：
+
+```json
+{ "summary": { "total": 7, "ok": 7, "drift": 0, "sourceDrift": 0, "missing": 0 },
+  "entries": [{ "file": "10_母图_中性站姿.txt",
+                "recordedSha256": "6a47656131dd…", "actualSha256": "6a47656131dd…",
+                "source": "02_提示词_GPT-Image-2.5.md §3 第0步（逐字）",
+                "matchesRecord": true, "matchesTextSource": true, "status": "ok" }] }
+```
+
+`status` 必须是 `ok`：
+
+| 非 ok 值 | 含义 | 怎么办 |
+|---|---|---|
+| `payload-drift` | 磁盘上的负载与索引记录不符 → 被手打改写过 | 重跑抽取，别用它出图 |
+| `source-drift` | 负载正文已不在它声称的来源文件里 → 上游 `texts/` 改了没重建 | 重建负载 |
+| `missing` | 负载文件或索引没了 | 先跑 `commands(step="build")` |
+
+### 3. 出图：先拿命令，再执行
+
+**这个插件不会替你出图**——出图有费用、有副作用。它只给命令：
+
+> 出图第一步该敲什么？
+
+`whale_meme(action="commands", step="mother")` 返回可直接粘贴的 PowerShell 命令，
+外加该步的注意事项（例如「第 0 步不能省：立绘是成熟比例，直接用立绘做后两格的输入会继承御姐比例」）。
+`step` 可取：`build` / `mother` / `upper` / `lower` / `whole` / `compose` / `check` / `index`。
+
+省略 `model` 时按步骤给推荐值（出图类默认 `gpt-image-2.5-sunburst`，定稿档 `xhigh`）。
+要换模型或档位就明说：
+
+> 用 gpt-image-2 出，high 档
+
+### 4. 出完图：`lineage` + `outputs`
+
+**`lineage` 回答「这张图到底是用哪份提示词出的」**：
+
+```json
+{ "rows": [{ "model": "gpt-image-2", "image": "02_上格_自信_1024.png",
+             "promptSha256": "fb8daccebd30…", "payload": "11_上格_编辑.txt", "status": "ok" }] }
+```
+
+- `status: ok` + `payload` 有值 → 血缘清楚，可追溯到具体负载文件。
+- `unknown-prompt` → 该产物用的负载**已不在索引里**（负载被重建过，或当初是手打投喂的）。这是要警惕的信号。
+- `no-metadata` → 该产物没有 `.json` 元数据。**本地拼合产物（`04_拼合_*.png`）属于正常**，
+  因为 `compose_panels.py` 不写元数据；其它文件出现这个就说明出图流程漏了元数据。
+
+**`outputs` 回答「尺寸和透明通道对不对」**：
+
+```json
+{ "images": [{ "file": "05_整图一次出图_1024x1536.png", "size": "1024x1536",
+               "bytesHuman": "1.87 MB", "alphaChannel": false,
+               "deliverable": true, "quality": "high", "background": "opaque" }] }
+```
+
+`alphaChannel` 来自 PNG 头的**直接解析**，不是猜的：`false` 就是真的没有透明通道，要透明贴纸得走
+`gpt-image-2.5-sunburst` + `background: transparent`。`deliverable: true` 标出的是推荐交付件。
+
+> ⚠️ `outputs` 只做**机械**检查。中文逐字、加粗范围、角色五要素、情绪反差**必须人眼放大到 200% 核对**，
+> 机械检查不能替代 `04_验收清单.md`。
+
+### 5. 开新任务：`scaffold`（两步走）
+
+> 帮我开一个新任务：题材是「改需求改到崩溃」
+
+它**默认只出计划、不写任何文件**：
+
+```json
+{ "dryRun": true, "wrote": false,
+  "plan": { "taskId": "task02", "dirName": "task02_改需求改到崩溃",
+            "files": ["00_分镜与文案锁定.md", "01_提示词_GPT-Image-2.md", "02_提示词_GPT-Image-2.5.md",
+                      "03_无字底图与后期排版兜底.md", "04_验收清单.md", "README.md"] } }
+```
+
+看过路径和文件名没问题，再说「确认创建」——代理会带 `write: true` 重调，才真正落盘。
+
+如果任务号已被占用，它会**直接拒绝**（`ok: false`，错误信息里列出冲突路径），不会覆盖你已有的任务。
+
+创建后还有三件手工活（技能正文里有详述）：**逐字文案定稿 → 抽负载 → 才算能出图**。
+顺序别颠倒：先出图再改文案，已出的图就和负载对不上血缘了。
+
+### 6. 可以直接抄的问法
+
+```
+这个工作区怎么工作？
+现在是什么状态？
+task01 的台词是什么？哪几个字要加粗？
+投喂文本有没有被手打改写？
+出图第一步该敲什么命令？
+用 gpt-image-2.5-sunburst 的 xhigh 出整图，命令给我
+这些产物分别是用哪份提示词出的？
+出的图尺寸和透明通道对不对？
+帮我开一个新任务：题材是「……」
+```
+
+### 7. 它不会做的事
+
+| | 说明 |
+|---|---|
+| 不出图 | 只给命令文本；执行与否你决定。出图有费用 |
+| 不替你写文案 | `task` 只读 `00_*` 并结构化，绝不改写 |
+| 不自动验收 | `outputs` 是机械检查，不是验收结论 |
+| 不发布、不上传 | 无任何网络代码 |
+| 不碰工作区外的文件 | 唯一例外是安装/卸载脚本改 DSH profile（带备份、可回滚） |
+
 ## 配置
 
 `cordis.patch.yml`，或 profile 的 `cordis.patch.yml` 里 `id: whale-meme` 条目可覆盖：
