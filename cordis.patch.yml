@@ -1,16 +1,25 @@
 # dsh-whale-meme — bundle 层挂载补丁
 #
-# 说明：本插件通过 profile 的 dependencies（link: 本地目录）+ dsh.profile.bundles 装载，
-# 该 bundle 补丁只声明插件自身的默认配置。所有键都可被 profile 的 cordis.patch.yml 覆盖。
-- id: whale-meme
-  name: dsh-whale-meme
-  config:
-    # 工作区定位顺序：显式 root → DSH_WHALE_ROOT → 从会话工作目录逐级向上探测。
-    # 留空即自动探测；自动探测的判据见 lib/core.mjs 的 looksLikeWhaleWorkspace。
-    root: null
-    # 是否在加载时把工作流契约（角色锚点 / 目录归属 / 硬规则）注入工作区上下文。
-    injectWorkspaceContract: true
-    # 是否注册 whale-meme-workflow 技能（技能正文内嵌在 lib/skill.mjs）。
-    registerSkill: true
-    # 契约注入的字符上限，避免上下文膨胀。
-    contractMaxChars: 6000
+# 说明：本插件通过 profile 的 dependencies（link: 本地目录）+ dsh.profile.bundles 装载。
+# 宿主把 bundle 声明里的 patch 文件当作「补丁层」，语义是：
+#   顶层数组里**带 `id` 的裸条目 = 对已存在条目的覆盖**（id-targeted config override），
+#   想**新增插件行必须包在 `insert:` 列表里**。
+# 对照：dsh-save-money / @anionex/dsh-vision-toolkit 用的都是 `- insert:` 形式。
+#
+# ⚠ 2026-10-11 修复：本文件原先是裸 `- id: whale-meme`，宿主在组合时判定
+#   「entry "whale-meme" not found」并把整条补丁丢弃（只写 stderr，无异常），
+#   表现为 whale_meme 工具与 whale-meme-workflow 技能**都不出现**。
+#   已改为 insert 形式，并用宿主自带的 loadProfileDirectory/composeEntries 复现验证。
+- insert:
+    - id: whale-meme
+      name: dsh-whale-meme
+      config:
+        # 工作区定位顺序：显式 root → DSH_WHALE_ROOT → 从会话工作目录逐级向上探测。
+        # 留空即自动探测；自动探测的判据见 lib/core.mjs 的 looksLikeWhaleWorkspace。
+        root: null
+        # 是否在加载时把工作流契约（角色锚点 / 目录归属 / 硬规则）注入工作区上下文。
+        injectWorkspaceContract: true
+        # 是否注册 whale-meme-workflow 技能（技能正文内嵌在 lib/skill.mjs）。
+        registerSkill: true
+        # 契约注入的字符上限，避免上下文膨胀。
+        contractMaxChars: 6000

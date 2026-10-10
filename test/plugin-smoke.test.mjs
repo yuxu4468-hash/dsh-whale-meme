@@ -8,6 +8,7 @@
  */
 
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 
 import { ACTIONS, TOOL_NAME } from '../lib/tools.mjs'
@@ -130,5 +131,48 @@ describe('插件接线', () => {
     const check = selfCheck()
     assert.equal(check.skillFileExists, true)
     assert.deepEqual(check.actions, ACTIONS)
+  })
+})
+
+/**
+ * bundle 补丁的形状。
+ *
+ * 宿主的补丁层语义是：顶层数组里**带 `id` 的裸条目 = 对已存在条目的覆盖**，
+ * 新增插件行必须包在 `insert:` 列表里。写成裸 `- id: whale-meme` 时，
+ * 宿主在组合期判 `entry "whale-meme" not found`，把整条补丁丢弃、只往 stderr
+ * 写一行警告 —— 不抛错、不影响启动，表现就是工具与技能**都不出现**。
+ * 2026-10-11 本机实测踩到过这个坑（重启后 whale_meme 工具缺失），故加此断言。
+ */
+describe('bundle 补丁形状', () => {
+  const patchUrl = new URL('../cordis.patch.yml', import.meta.url)
+  const packageUrl = new URL('../package.json', import.meta.url)
+
+  it('用 insert 形式挂载，且不存在会被静默丢弃的顶层裸 id 条目', () => {
+    const lines = readFileSync(patchUrl, 'utf8').split(/\r?\n/)
+
+    const bareTopLevel = lines.filter(line => /^- id:/.test(line))
+    assert.deepEqual(
+      bareTopLevel,
+      [],
+      '顶层裸 `- id:` 是「覆盖已存在条目」的语义，宿主会判 not found 并丢弃整个 bundle',
+    )
+
+    assert.ok(
+      lines.some(line => /^- insert:\s*$/.test(line)),
+      '新增插件行必须写在 `- insert:` 列表里',
+    )
+
+    const inserted = lines.filter(line => /^\s+- id:\s*whale-meme\s*$/.test(line))
+    assert.equal(inserted.length, 1, 'insert 列表里要有且只有一个 id: whale-meme 条目')
+    assert.ok(
+      lines.some(line => /^\s+name:\s*dsh-whale-meme\s*$/.test(line)),
+      'insert 条目的 name 必须是包名 dsh-whale-meme，宿主才能解析到本包',
+    )
+  })
+
+  it('package.json 的 bundle 声明指向这份补丁', () => {
+    const manifest = JSON.parse(readFileSync(packageUrl, 'utf8'))
+    assert.equal(manifest.name, 'dsh-whale-meme')
+    assert.equal(manifest.dsh.bundle.patch, './cordis.patch.yml')
   })
 })

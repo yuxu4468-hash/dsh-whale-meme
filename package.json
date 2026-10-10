@@ -1,6 +1,6 @@
 {
   "name": "dsh-whale-meme",
-  "version": "0.8.0",
+  "version": "1.0.0",
   "description": "把表情包绘制工作区的工作流固化为 DSH 插件：14 个 action 的 whale_meme 工具（工作区校验、参考素材下载、自由需求起稿、提示词预览、确认后出图）加一份 whale-meme-workflow 工作流技能，唤醒词「蓝色大肥鱼表情包绘画」。",
   "license": "CC0-1.0",
   "repository": {

@@ -8,6 +8,33 @@
 
 暂无。
 
+## [1.0.0] - 2026-10-11
+
+首个**真正能在会话里挂载起来**的版本。
+
+此前 0.1.0 ~ 0.8.0 的全部功能都只经过单元测试、`selftest` 与直接调用插件代码的验证，
+这些路径**全都绕过了 bundle 装载这一层**，所以下面这个致命缺陷在没有真机验证前无法暴露。
+
+### Fixed
+
+- **bundle 补丁写成了「覆盖」语义，导致插件其实从未被装载**（2026-10-11 本机实测）。
+  `cordis.patch.yml` 原先是一个裸条目 `- id: whale-meme`。宿主的补丁层语义是
+  **「带 `id` 的裸条目 = 对已存在条目的覆盖」**，新增插件行必须包在 `insert:` 列表里
+  （对照 `dsh-save-money` / `@anionex/dsh-vision-toolkit`）。于是宿主在组合期去匹配一个
+  并不存在的 `whale-meme` 条目，判定 `entry "whale-meme" not found`，**把整条补丁丢弃，
+  只往 stderr 写一行警告** —— 不抛错、不影响启动，表现就是 `whale_meme` 工具与
+  `whale-meme-workflow` 技能**在会话里完全不出现**，连唤醒词都无从生效。
+  现改为 `- insert:` 形式；用宿主自带的 `loadProfileDirectory` + `composeEntries` 复现验证：
+  修复前 `entry "whale-meme" not found`、最终条目 214 条且无 whale，修复后 0 警告、215 条且
+  whale 条目带正确 `config`。
+
+### Added
+
+- `test/plugin-smoke.test.mjs` 新增「bundle 补丁形状」测试组（2 项）：禁止顶层裸 `- id:`、
+  要求 `- insert:` + `id: whale-meme` + `name: dsh-whale-meme`，并核对 `package.json` 的
+  `dsh.bundle.patch` 指向。原测试只覆盖接线代码（假 Cordis 上下文），测不到补丁形状，
+  这正是该缺陷能潜伏至 0.8.0 的原因。
+
 ## [0.8.0] - 2026-10-11
 
 ### Changed
@@ -290,5 +317,6 @@
   `DSH_WHALE_PYTHON` → `DSH_HOME` 推导（含 Windows 与 POSIX 布局）→ PATH 里的 `python`，
   换机器不用改代码，公开仓库也不再带个人路径。
 
-[Unreleased]: https://github.com/yuxu4468-hash/dsh-whale-meme/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/yuxu4468-hash/dsh-whale-meme/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/yuxu4468-hash/dsh-whale-meme/releases/tag/v1.0.0
 [0.1.0]: https://github.com/yuxu4468-hash/dsh-whale-meme/releases/tag/v0.1.0
