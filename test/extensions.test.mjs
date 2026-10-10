@@ -243,11 +243,16 @@ describe('自由需求起稿：校验从严', () => {
     assert.ok(result.errors.some(error => /没有出现在台词里/.test(error)))
   })
 
-  it('超过两格被挡下（本项目实测结论）', () => {
-    const three = [...good.panels, { marker: '格 3', text: '第三格。' }]
-    const result = checkDraft({ ...good, panels: three })
-    assert.equal(result.ok, false)
-    assert.ok(result.errors.some(error => /最多.*两格/.test(error)))
+  it('超过两格改为提醒、不再挡下（格数不设限）', () => {
+    const four = [
+      ...good.panels,
+      { marker: '格 3', text: '第三格。' },
+      { marker: '格 4', text: '第四格。' },
+    ]
+    const result = checkDraft({ ...good, panels: four })
+    assert.equal(result.ok, true, `格数不该阻断：${JSON.stringify(result.errors)}`)
+    assert.ok(result.warnings.some(warning => /格数不设限/.test(warning)), JSON.stringify(result.warnings))
+    assert.equal(result.draft.panels.length, 4)
   })
 
   it('marker 重复被挡下', () => {

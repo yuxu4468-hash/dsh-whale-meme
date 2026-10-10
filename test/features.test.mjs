@@ -20,6 +20,7 @@ import {
   STYLE_PRESETS,
   assemblePrompt,
   buildRenderPlan,
+  buildRequirementsSection,
   formatPreview,
   normalizeRequirements,
   planToken,
@@ -52,12 +53,13 @@ describe('文本之外的要求', () => {
     }
   })
 
-  it('未知画风但像自定义描述时降级为自定义并给出提示', () => {
+  it('认不出的画风降级为自定义描述、不报错也不警告（减少限制）', () => {
     const result = normalizeRequirements({ style: '厚涂油画风格' })
-    assert.equal(result.ok, true)
+    assert.equal(result.ok, true, '自定义画风不该被拒')
     assert.equal(result.requirements.style, null)
     assert.equal(result.requirements.customStyle, '厚涂油画风格')
-    assert.ok(result.warnings.some(w => /预设/.test(w)))
+    // 「我把它当自定义画风了」这件事由 natural 层进 notes 告知，不在 requirements 里重复告警
+    assert.equal(result.warnings.some(w => /预设/.test(w)), false)
   })
 
   it('尺寸只接受实测可用档，且大小写与 × 号都能容错', () => {
@@ -73,12 +75,27 @@ describe('文本之外的要求', () => {
     assert.equal(normalizeRequirements({ background: '白色' }).ok, false)
   })
 
-  it('panels 只接受 1 或 2；null 与 undefined 都表示未指定', () => {
+  it('panels 不限格数：只要求正整数，null 与 undefined 都表示未指定', () => {
     assert.equal(normalizeRequirements({ panels: null }).ok, true, 'null 不能被当成非法值')
     assert.equal(normalizeRequirements({ panels: undefined }).ok, true)
+    assert.equal(normalizeRequirements({ panels: 1 }).ok, true)
     assert.equal(normalizeRequirements({ panels: 2 }).ok, true)
-    assert.equal(normalizeRequirements({ panels: 3 }).ok, false)
-    assert.equal(normalizeRequirements({ panels: 0 }).ok, false)
+    // 格数不设上限：三格、四格、六格都放行，超过两格只提醒
+    for (const panels of [3, 4, 6, 12]) {
+      const result = normalizeRequirements({ panels })
+      assert.equal(result.ok, true, `${panels} 格不该报错`)
+      assert.ok(result.warnings.some(warning => /格数不设限/.test(warning)), `${panels} 格应给出尺寸提醒`)
+    }
+    assert.equal(normalizeRequirements({ panels: 0 }).ok, false, '0 格不是正整数')
+    assert.equal(normalizeRequirements({ panels: -1 }).ok, false)
+    assert.equal(normalizeRequirements({ panels: 2.5 }).ok, false, '非整数不接受')
+  })
+
+  it('三格以上会写进版式说明（否则模型不知道该分几格）', () => {
+    const { requirements } = normalizeRequirements({ panels: 4 })
+    const section = buildRequirementsSection(requirements)
+    assert.match(section, /画面分 4 格/)
+    assert.match(section, /等分排布/)
   })
 
   it('质量档必须落在该模型支持的范围内', () => {
