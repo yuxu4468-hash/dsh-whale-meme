@@ -1,0 +1,56 @@
+# ── 绝不进仓库的东西 ───────────────────────────────────────────────
+# 本仓库只有代码与文档。角色立绘、参考语料、提示词成品、出图产物一律不进仓库，
+# 原因见 NOTICE.md。工作区根目录下的 datas/ texts/ outs/ 由 .gitignore 的上级规则挡住，
+# 这里再显式挡一遍，防止有人在插件目录里临时放了素材忘记删。
+assets/previews/
+assets/stickers/
+assets/*.png
+assets/*.webp
+assets/*.jpg
+assets/*.jpeg
+*.png
+*.webp
+*.jpg
+*.jpeg
+!assets/skill/**/*.png
+
+# 出图与中间产物
+outs/
+datas/
+texts/
+*.meta.json
+checks.json
+run_report.md
+
+# 凭据与本地配置：任何人都不要提交这些
+.credentials.yaml
+*.credentials.*
+.env
+.env.*
+*secret*
+*token*.txt
+*.pem
+*.key
+
+# 安装脚本写的备份：属于个人 profile，不进仓库
+*.bak
+*.bak-*
+*.orig
+
+# 运行时与依赖
+node_modules/
+.pnpm-store/
+*.log
+
+# 编辑器与系统
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 临时文件
+*.tmp
+*.temp
+*~

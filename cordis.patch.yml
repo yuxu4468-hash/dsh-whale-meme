@@ -1,0 +1,16 @@
+# dsh-whale-meme — bundle 层挂载补丁
+#
+# 说明：本插件通过 profile 的 dependencies（link: 本地目录）+ dsh.profile.bundles 装载，
+# 该 bundle 补丁只声明插件自身的默认配置。所有键都可被 profile 的 cordis.patch.yml 覆盖。
+- id: whale-meme
+  name: dsh-whale-meme
+  config:
+    # 工作区定位顺序：显式 root → DSH_WHALE_ROOT → 从会话工作目录逐级向上探测。
+    # 留空即自动探测；自动探测的判据见 lib/core.mjs 的 looksLikeWhaleWorkspace。
+    root: null
+    # 是否在加载时把工作流契约（角色锚点 / 目录归属 / 硬规则）注入工作区上下文。
+    injectWorkspaceContract: true
+    # 是否注册 whale-meme-workflow 技能（技能正文内嵌在 lib/skill.mjs）。
+    registerSkill: true
+    # 契约注入的字符上限，避免上下文膨胀。
+    contractMaxChars: 6000

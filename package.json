@@ -1,0 +1,59 @@
+{
+  "name": "dsh-whale-meme",
+  "version": "0.1.0",
+  "description": "把表情包绘制工作区的工作流固化为 DSH 插件：一个校验工作区结构、投喂负载与产物血缘的 whale_meme 工具，加一份 whale-meme-workflow 工作流技能。",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yuxu4468-hash/dsh-whale-meme.git"
+  },
+  "homepage": "https://github.com/yuxu4468-hash/dsh-whale-meme#readme",
+  "bugs": {
+    "url": "https://github.com/yuxu4468-hash/dsh-whale-meme/issues"
+  },
+  "type": "module",
+  "main": "./lib/index.mjs",
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./core": "./lib/core.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "assets/skill",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "NOTICE.md",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "sticker",
+    "meme",
+    "workflow",
+    "prompt-engineering",
+    "image-generation"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "os": [
+    "win32",
+    "linux",
+    "darwin"
+  ],
+  "scripts": {
+    "test": "node --test --test-concurrency=1 test/core.test.mjs test/plugin-smoke.test.mjs test/integration.test.mjs",
+    "test:ci": "node --test --test-concurrency=1 test/core.test.mjs test/plugin-smoke.test.mjs",
+    "selftest": "node scripts/selftest.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

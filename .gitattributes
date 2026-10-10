@@ -1,0 +1,20 @@
+# 禁止一切换行归一化：仓库内容必须与开发机上的字节完全一致。
+#
+# 原因：scripts/*.ps1 带 UTF-8 BOM，且 PowerShell 5.1 对编码极敏感。
+# 若 Git 在检出时把 LF 换成 CRLF（或反之）改动了这些文件，脚本可能被读坏。
+# 另外本插件不依赖“检出后自动修好编码”的约定，仓库里存什么就应当是什么。
+* -text
+
+# 显式按文本展示，便于 diff 与 GitHub 高亮
+*.md text
+*.mjs text
+*.yml text
+*.json text
+*.ps1 text
+*.txt text
+
+# 这些不该出现在仓库里（.gitignore 也会挡），此处再声明一次作为文档
+*.png binary
+*.webp binary
+*.jpg binary
+*.jpeg binary
