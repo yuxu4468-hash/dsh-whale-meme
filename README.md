@@ -15,6 +15,7 @@
 ## 目录
 
 - [它解决什么问题](#它解决什么问题)
+- [使用教程](#使用教程)
 - [三步上手](#三步上手)
 - [安装](#安装)
 - [工具：`whale_meme`](#工具whale_meme)
@@ -42,6 +43,241 @@
 | 不可判定 | 角色五要素是否保住、情绪反转是否成立、排版是否合规、合规边界 | `whale-meme-workflow` 技能正文 |
 
 工作流里的代价是真实的：一条硬规则漏掉，就是一次付费出图调用。
+
+## 使用教程
+
+这一节从头走一遍完整流程。**每个例子的输入输出都取自真实工作区**，不是示意。
+约定：`你` 表示你在对话里说的话，`调用` 表示代理会去调的工具。
+
+> 前提：已经[装好并重启](#安装后必须重启)。没重启的话，工具和技能都还没注册，下面第一步就会失败。
+
+### 步骤 0 · 确认插件活着
+
+```
+你：这个工作区怎么工作？
+调用：命中 whale-meme-workflow 技能
+```
+拿到的是四段流水线、两个模型的差异表、编辑链与环境坑。再让它调一次工具：
+
+```
+你：现在这个工作区是什么状态？
+调用：whale_meme(action="status")
+```
+
+若这一步没有反应，回到[安装](#安装)检查是否重启。
+
+### 步骤 1 · 摸清现状
+
+```
+你：现在是什么状态？
+调用：whale_meme(action="status")
+```
+
+真实返回（task01 那个工作区）：
+
+```jsonc
+{
+  "ok": true,
+  "root": "F:\\whale meme",                    // 认到的根目录，不对就用 DSH_WHALE_ROOT 纠正
+  "taxonomy": [                                 // 四个阶段目录是否都在
+    { "stage": "research", "dir": "datas",            "exists": true },
+    { "stage": "prompt",   "dir": "texts",            "exists": true },
+    { "stage": "payload",  "dir": "_tools/payloads",  "exists": true },
+    { "stage": "render",   "dir": "outs",             "exists": true }
+  ],
+  "tasks": [{
+    "id": "task01",
+    "textsFilesPresent": 5, "textsFilesTotal": 5,
+    "missingTextsFiles": [],                    // 空数组 = 提示词五件套齐全
+    "payloads": 7,                              // 已抽取的投喂负载份数
+    "models": [
+      { "model": "gpt-image-2",           "images": 7, "deliverables": ["05_整图一次出图_1024x1536.png"], "hasChecks": true },
+      { "model": "gpt-image-2.5-sunburst","images": 7, "deliverables": ["05_整图一次出图_1024x1536.png"], "hasChecks": true }
+    ],
+    "warnings": []
+  }]
+}
+```
+
+**看哪里**：`root` 对不对；`missingTextsFiles` 是否为空；每个模型有没有 `deliverables`；`warnings` 有什么。
+
+### 步骤 2 · 出图前：拿到权威文案
+
+```
+你：task01 的台词是什么？哪几个字要加粗？
+调用：whale_meme(action="task", task="task01")
+```
+
+```jsonc
+{
+  "storyboard": {
+    "lines": [
+      { "marker": "格 1（上格）", "text": "我的字符串替换把脚本改坏了。我直接读取并修复。" },
+      { "marker": "格 2（下格）", "text": "文件被我的替换操作整篇损坏。" }
+    ],
+    "boldHints": ["整篇损坏"],     // 只有这四个字加粗
+    "warnings": []                 // 非空就是你的 00_* 格式有问题，先改文案
+  }
+}
+```
+
+`lines[].text` **原样照抄**，一个字都不能改。
+
+### 步骤 3 · 出图前：确认投喂文本没被改过
+
+这一步能省下一次付费调用。
+
+```
+你：投喂文本有没有被手打改写？
+调用：whale_meme(action="payload", task="task01")
+```
+
+```jsonc
+{
+  "ok": true,
+  "summary": { "total": 7, "ok": 7, "drift": 0, "sourceDrift": 0, "missing": 0 },
+  "entries": [{
+    "file": "10_母图_中性站姿.txt",
+    "recordedSha256": "6a47656131dd…",
+    "actualSha256":   "6a47656131dd…",   // 与索引记录一致
+    "matchesTextSource": true,            // 正文仍逐字出现在来源文件里
+    "status": "ok"
+  }]
+}
+```
+
+`status` 必须是 `ok`；不是 `ok` 就照下表处理，**别拿它出图**：
+
+| 非 ok | 含义 | 怎么办 |
+|---|---|---|
+| `payload-drift` | 磁盘负载与索引记录不符（被手打改写过） | 重跑 `build`，别用它出图 |
+| `source-drift` | 正文已不在来源文件里（上游 `texts/` 改了没重建） | 重跑 `build` |
+| `missing` | 负载或索引没了 | 先 `{ "action": "build", "task": "…" }` |
+
+### 步骤 4 · 开一个新任务
+
+四步，顺序别颠倒。
+
+```jsonc
+// ① 目录缺了就补齐（只创建、不覆盖；先看计划再落盘）
+{ "action": "init" }
+{ "action": "init", "write": true }
+
+// ② 建任务骨架：先 dry-run 看路径，确认后写盘
+{ "action": "scaffold", "title": "改需求改到崩溃" }
+{ "action": "scaffold", "title": "改需求改到崩溃", "write": true }
+```
+
+```jsonc
+// scaffold 的 dry-run 返回
+{ "dryRun": true, "wrote": false,
+  "plan": { "taskId": "task02", "dirName": "task02_改需求改到崩溃",
+            "textsDir": "…\\texts\\task02_改需求改到崩溃",
+            "files": [ { "fileName": "00_分镜与文案锁定.md", "chars": 792 }, "…" ] } }
+```
+
+任务号被占用时会**直接拒绝**并列出冲突路径，不会覆盖你已有的任务。
+
+```jsonc
+// ③ 手工把 00_* 的逐字文案定稿，并在 .whale/manifest.json 补 extraction 计划
+// ④ 逐字抽负载：先 dry-run 看 sha，再落盘
+{ "action": "build", "task": "task02" }
+{ "action": "build", "task": "task02", "write": true }
+{ "action": "payload", "task": "task02" }        // 复核，应全 ok
+```
+
+### 步骤 5 · 调参数、看预览、确认出图
+
+先说要求（这一步**不花钱**）：
+
+```
+你：换成 Q 版贴纸、1024 方形、透明底，尾鳍不要有白斑，先给我看提示词
+调用：whale_meme(action="preview", task="task01", step="whole",
+                 style="chibi-sticker", size="1024x1024",
+                 background="transparent", extra=["尾鳍不要有白斑"])
+```
+
+返回里的 `planSummary`：
+
+```jsonc
+{ "model": "gpt-image-2.5-sunburst", "size": "1024x1024", "quality": "xhigh",
+  "background": "transparent", "style": "chibi-sticker",
+  "outputs": ["…\\outs\\task01_…\\gpt-image-2.5-sunburst\\06_单格_1024x1024_透明.png"] }
+```
+
+> 注意尺寸是怎么定的：`chibi-sticker` 预设带 1024²，你另给的 `size` 会覆盖它；
+> `background: transparent` 让产出文件名自动带上「_透明」后缀。
+> 顺带一提，`gpt-image-2` 不支持透明底，这类组合会被**直接拒绝**而不是静默降级。
+
+`preview` 还返回 `preview` 字段（提示词全文）、`token`（确认令牌）、`styles`（可用画风清单）。
+看完确认无误，再出图：
+
+```
+你：预览没问题，出图
+调用：whale_meme(action="render", task="task01", step="whole",
+                 style="chibi-sticker", size="1024x1024",
+                 background="transparent", extra=["尾鳍不要有白斑"],
+                 confirm=true, token="<preview 返回的令牌>")
+```
+
+**门禁**：不带 `confirm: true` 时只返回计划，绝不会出图；令牌一次性、10 分钟有效、
+参数一改就失效。每确认一次 = 一次付费调用。
+
+不想让插件碰出图，就用：
+
+```jsonc
+{ "action": "commands", "step": "whole", "model": "gpt-image-2.5-sunburst", "quality": "xhigh" }
+```
+拿到可直接粘贴的命令，自己执行。
+
+### 步骤 6 · 出图后验收
+
+```
+你：这些产物分别是用哪份提示词出的？
+调用：whale_meme(action="lineage", task="task01")
+```
+
+```jsonc
+{ "rows": [{ "model": "gpt-image-2", "image": "02_上格_自信_1024.png",
+             "promptSha256": "fb8daccebd30…",
+             "payload": "11_上格_编辑.txt",     // 血缘清楚
+             "status": "ok" }],
+  "summary": { "unknownPrompt": 0, "missingMetadata": 4,
+               "unaligned": ["gpt-image-2/04_拼合_1024x1536.png", "…"] } }
+```
+
+| status | 含义 |
+|---|---|
+| `ok` + `payload` 有值 | 可追溯到具体负载文件 |
+| `unknown-prompt` | 该产物用的负载已不在索引里（负载被重建过，或当初手打投喂） |
+| `no-metadata` | 没有 `.json` 元数据。**本地拼合产物（`04_拼合_*`）属正常**，其它文件出现就要查 |
+
+```
+你：出的图尺寸和透明通道对不对？
+调用：whale_meme(action="outputs", task="task01")
+```
+
+```jsonc
+{ "images": [{ "file": "05_整图一次出图_1024x1536.png", "size": "1024x1536",
+               "bytesHuman": "1.87 MB", "alphaChannel": false,
+               "deliverable": true, "quality": "high", "background": "opaque" }] }
+```
+
+`alphaChannel` 来自 PNG 头的**直接解析**：`false` 就是真没有透明通道。
+
+> ⚠️ 这两步都是**机械**检查。中文逐字、加粗范围、角色五要素、情绪反差**必须人眼放大到 200% 核对**，
+> 按 `04_验收清单.md` 走，机械检查不能替代验收。
+
+### 步骤 7 · 出问题时的排查顺序
+
+| 症状 | 先查这里 |
+|---|---|
+| 提示词五件套不齐 | `status` 的 `missingTextsFiles` |
+| 文案格式不对（缺全角句号等） | `task` 的 `storyboard.warnings` |
+| 担心投喂被改过 | `payload`，三种 `status` 非 ok 的含义见步骤 3 |
+| 产物来路不明 | `lineage`，看 `unknown-prompt` / `no-metadata` |
+| 尺寸或透明底不对 | `outputs` 的 `size` / `alphaChannel` |
+| 出图失败 | `render` 返回的 `errors` / `stderrTail`；失败**不会自动重试**，要重新确认 |
 
 ## 三步上手
 
