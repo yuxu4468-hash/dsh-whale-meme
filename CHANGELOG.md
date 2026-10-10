@@ -12,10 +12,10 @@
 
 ### Changed
 
-- **授权改为 CC0 1.0 Universal**（公有领域奉献）。`LICENSE` 换成 CC0 官方全文
-  （取自 creativecommons.org 的 legalcode 原文，未作修改），并在文末附本仓库的适用说明：
-  CC0 只覆盖仓库内的原创代码与文档，素材的授权另行说明（见 NOTICE.md）。
-  `package.json` 的 `license` 字段与各文档里的授权口径同步改为 CC0。
+- **授权改为 CC0 1.0 Universal**（公有领域奉献）。`LICENSE` 换成 CC0 官方原文、
+  **一字未改**（取自 creativecommons.org 的 legalcode，与 SPDX 发布的 `CC0-1.0.txt` 逐字节相同）。
+  保持原文是因为 GitHub 的许可识别采用精确匹配，在文件里追加任何说明都会让仓库页显示成「Other」；
+  本仓库的适用范围与例外改写入 NOTICE.md 第七节。`package.json` 的 `license` 字段与各文档口径同步改为 CC0。
   CC0 不放弃商标权与专利权（第 4(a) 条），且不要求署名。
 - **README 重构**：删除「发布前检查清单」一节；新增「三步上手」与章节目录；
   把零散的用法说明收拢到工具章节下（只读校验 / 会写盘的动作 / 提示词预览与出图 /

@@ -120,19 +120,3 @@ express Statement of Purpose.
     party to this document and has no duty or obligation with respect to
     this CC0 or use of the Work.
 
-────────────────────────────────────────────────────────────────────────
-
-本仓库（dsh-whale-meme）的原创代码与文档由作者以 CC0 1.0 Universal 贡献到公有领域。
-
-说明：
-
-1. 以上为 Creative Commons 发布的 CC0 1.0 Universal 官方法律文本，原文见
-   https://creativecommons.org/publicdomain/zero/1.0/legalcode ，此处未作修改。
-2. CC0 只覆盖本仓库内含的原创内容（lib/、scripts/、test/、assets/ 与各 .md 文档）。
-3. 本仓库**不包含**任何角色立绘、社区参考语料、提示词成品或出图产物，
-   它们不随本仓库授权，仍归各自原作者所有；详见 NOTICE.md。
-   把它们放进你的仓库时，不要假定 CC0 覆盖它们。
-4. CC0 第 4(a) 条明确：不放弃商标权与专利权。
-
-建议（非强制，CC0 不要求署名）：若你愿意，可在你的项目里注明来源
-https://github.com/yuxu4468-hash/dsh-whale-meme 。

@@ -385,9 +385,11 @@ node scripts/selftest.mjs --json   # 机器可读报告；退出码 0 表示全�
 ## 授权与参与
 
 - [LICENSE](LICENSE) — **CC0 1.0 Universal**：本仓库的原创代码与文档已贡献到公有领域，
-  可自由使用、修改、再分发，**无需署名**（CC0 不放弃商标权与专利权，见其第 4(a) 条）
-- [NOTICE.md](NOTICE.md) — 角色、语料、产物的授权**不随本插件走**，归原作者；
-  本仓库刻意不含任何素材
+  可自由使用、修改、再分发，**无需署名**。该文件是 CC0 官方原文、一字未改
+  （GitHub 的许可识别采用精确匹配，改动文本会让仓库页显示成「Other」）；
+  本仓库的适用范围与例外写在 [NOTICE.md](NOTICE.md) 第七节
+- [NOTICE.md](NOTICE.md) — 授权边界：什么不属于本仓库、归谁；以及 CC0 的适用范围
+  （不含商标权与专利权，见 CC0 第 4(a) 条）
 - [CONTRIBUTING.md](CONTRIBUTING.md) — 改动约定（先写反例测试、保持只读、不引依赖）
 - [SECURITY.md](SECURITY.md) — 攻击面与私密报告方式
 - [CHANGELOG.md](CHANGELOG.md) — 版本变化
