@@ -8,6 +8,45 @@
 
 暂无。
 
+## [1.0.1] - 2026-10-11
+
+修复 1.0.0 之后仍然**装载不起来**的第二个独立缺陷：补丁形状对了，这次是**工具定义本身过不了宿主的 schema 门禁**。
+
+### Fixed
+
+- **`ctx.tools.register` 的 `output.schema` 用了作者式写法，被宿主的 `assertSupportedJsonSchema` 直接拒绝**
+  （2026-10-11 本机实测，用宿主自带的 `@deepseek-ai/dsh-tools/lib/types/json-schema.js` 复现）。
+  原先 `output.schema.properties` 里写成 `required: true`（属性级布尔）。宿主的注册面
+  **不是** `defineTool` 的作者式 schema：`ToolRegistry.register()` 第 2882 行直接对
+  `definition.output.schema` 调 `assertSupportedJsonSchema`，该断言要求 `required` 是
+  **字符串数组**，于是抛
+  `JsonSchemaError: unsupported JSON schema: schema.properties.reply.required is not supported on type "string"; schema.properties.ok.required …`。
+  这条异常从 `apply()` 冒出 → 整个插件挂载失败 → `whale_meme` 工具与
+  `whale-meme-workflow` 技能**依然都不出现**，重启多少次都一样。
+  现改为契约写法：对象层 `required: ['reply', 'ok', 'action']`，属性里只留
+  `type` / `description`。
+- **`parameters` 没有包成对象根**。`register` 直接把它当模型可见的 JSON Schema 用，
+  原先传的是裸属性映射（没有 `type: 'object'`），模型侧看到的是一个无根 schema。
+  现统一由 `objectParameters()` 包成 `{ type: 'object', properties: {...} }`
+  （与 `dsh-save-money` / `@anionex/dsh-vision-toolkit` 的原始 schema 契约一致）。
+
+### Added
+
+- `test/plugin-smoke.test.mjs` 加一层**本地复刻的宿主 schema 门禁** `assertHostSchemaShape()`，
+  直接挂在假上下文的 `tools.register` 上：任何属性级布尔 `required`、或 `required` 里出现
+  未声明属性，都会在单测阶段就炸（原测试只 `push` 定义、不看形状，正是该缺陷潜伏的原因）。
+  另加 1 项反例断言证明这道门禁本身有效。7 个测试文件共 189 项全绿。
+
+### Verified
+
+- 在本机真机路径上装载验证（`ELECTRON_RUN_AS_NODE=1 "DeepSeek Harness.exe" --expose-internals`，
+  直接 import 宿主 asar 里的真 `assertSupportedJsonSchema` / `assertObjectJsonSchema` /
+  `validateJsonSchemaValue`）：
+  `apply() resolved`，注册键 `["whale_meme", "skill:whale-meme-workflow"]`；
+  `parameters` 通过对象根校验，24 个参数类型齐全，`action` 的 enum 校验生效。
+- 另用宿主自己的 `loadProfileDirectory` + `composeEntries` 复核 bundle 层：
+  22 个 layer、`skippedBundles` 为 0、组合结果含 `whale-meme=dsh-whale-meme`。
+
 ## [1.0.0] - 2026-10-11
 
 首个**真正能在会话里挂载起来**的版本。
@@ -317,6 +356,7 @@
   `DSH_WHALE_PYTHON` → `DSH_HOME` 推导（含 Windows 与 POSIX 布局）→ PATH 里的 `python`，
   换机器不用改代码，公开仓库也不再带个人路径。
 
-[Unreleased]: https://github.com/yuxu4468-hash/dsh-whale-meme/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/yuxu4468-hash/dsh-whale-meme/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/yuxu4468-hash/dsh-whale-meme/releases/tag/v1.0.1
 [1.0.0]: https://github.com/yuxu4468-hash/dsh-whale-meme/releases/tag/v1.0.0
 [0.1.0]: https://github.com/yuxu4468-hash/dsh-whale-meme/releases/tag/v0.1.0

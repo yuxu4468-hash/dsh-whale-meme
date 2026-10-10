@@ -15,7 +15,41 @@ import { ACTIONS, TOOL_NAME } from '../lib/tools.mjs'
 import { SKILL_NAME, apply, inject, name, selfCheck } from '../lib/index.mjs'
 import { makeFixtureWorkspace } from './helpers.mjs'
 
-/** 造一个假的 DSH 上下文，记录所有注册动作。 */
+/**
+ * 宿主 `ctx.tools.register` 的 schema 契约，本地复刻最小子集。
+ *
+ * 这一层**不是** `defineTool` 的作者式 schema：register 直接拿
+ * `definition.parameters` 当模型可见的 JSON Schema，并对 `definition.output.schema`
+ * 调 `assertSupportedJsonSchema`。该断言要求 `required` 是**字符串数组**，
+ * 写在属性对象里的 `required: true` 会被判 `unsupported JSON schema` 并抛错，
+ * 导致整个 `apply()` 失败 —— 工具与技能**都不出现**（2026-10-11 本机实测踩到）。
+ * 这里刻意把这条门禁放进假上下文，让同类错误在单测里就炸，而不是等重启后才发现。
+ */
+function assertHostSchemaShape(node, path = 'schema') {
+  if (node === null || typeof node !== 'object') return
+  if (Array.isArray(node)) {
+    node.forEach((entry, index) => assertHostSchemaShape(entry, `${path}[${index}]`))
+    return
+  }
+  if (Object.hasOwn(node, 'required')) {
+    assert.ok(
+      Array.isArray(node.required) && node.required.every(entry => typeof entry === 'string'),
+      `${path}.required 必须是字符串数组（宿主 assertSupportedJsonSchema 不接受布尔 required）`,
+    )
+    for (const key of node.required) {
+      assert.ok(
+        node.properties && Object.hasOwn(node.properties, key),
+        `${path}.required 里的 "${key}" 必须出现在同层 properties 中`,
+      )
+    }
+  }
+  for (const [key, value] of Object.entries(node)) {
+    if (key === 'required') continue
+    assertHostSchemaShape(Array.isArray(value) && key === 'enum' ? null : value, `${path}.${key}`)
+  }
+}
+
+/** 造一个假的 DSH 上下文，记录所有注册动作（注册时套用宿主的 schema 门禁）。 */
 function makeFakeContext() {
   const record = {
     tools: [],
@@ -29,7 +63,16 @@ function makeFakeContext() {
       warn: message => record.logs.warn.push(String(message)),
       debug: message => record.logs.debug.push(String(message)),
     },
-    tools: { register: definition => record.tools.push(definition) },
+    tools: {
+      register: definition => {
+        assertHostSchemaShape(definition.output.schema, 'output.schema')
+        assertHostSchemaShape(definition.parameters, 'parameters')
+        assert.equal(definition.parameters.type, 'object', 'parameters 必须是对象根原始 JSON Schema')
+        assert.equal(typeof definition.output.render, 'function', 'output.render 必填')
+        assert.equal(typeof definition.execute, 'function', 'execute 必填')
+        record.tools.push(definition)
+      },
+    },
     skills: { register: definition => record.skills.push(definition) },
     workspace: { appendInstructions: async text => record.contracts.push(text) },
   }
@@ -52,9 +95,12 @@ describe('插件接线', () => {
     assert.equal(record.tools.length, 1)
     const tool = record.tools[0]
     assert.equal(tool.name, TOOL_NAME)
-    assert.deepEqual(tool.parameters.action.enum, ACTIONS)
+    assert.deepEqual(tool.parameters.properties.action.enum, ACTIONS)
+    assert.equal(tool.parameters.type, 'object', '模型可见的参数 schema 必须是对象根')
     assert.equal(typeof tool.execute, 'function')
-    assert.equal(tool.output.schema.properties.ok.required, true)
+    // 宿主契约：required 是对象层的字符串数组，不能写成属性里的 `required: true`
+    assert.deepEqual(tool.output.schema.required, ['reply', 'ok', 'action'])
+    assert.equal(Object.hasOwn(tool.output.schema.properties.ok, 'required'), false)
     assert.ok(tool.description.includes('鲸鳍状耳'), '描述里要带角色三要素锚点')
 
     assert.equal(record.skills.length, 1)
@@ -68,6 +114,18 @@ describe('插件接线', () => {
     assert.equal(record.contracts.length, 1)
     assert.match(record.contracts[0], /工作流契约/)
     assert.match(record.contracts[0], /上善无形/)
+  })
+
+  it('schema 门禁本身能抓住宿主会拒绝的形状', () => {
+    // 反例：属性里写 `required: true` —— 宿主 assertSupportedJsonSchema 判 unsupported 并让 apply() 抛错
+    assert.throws(
+      () => assertHostSchemaShape({ type: 'object', properties: { ok: { type: 'boolean', required: true } } }),
+      /required 必须是字符串数组/,
+    )
+    // 正例：契约要求的对象层字符串数组
+    assert.doesNotThrow(() =>
+      assertHostSchemaShape({ type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] }),
+    )
   })
 
   it('工具 execute 真的能跑通（回落到真实调用路径）', async () => {
